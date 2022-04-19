@@ -11,16 +11,16 @@ import (
 	"telython/pkg/log"
 )
 
-func createWallet(accountId uint64) (*ethapi.Wallet, *http.Error) {
+func createWallet(username string) (*ethapi.Wallet, *http.Error) {
 	wallet, err := ethapi.CreateWallet()
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return nil, http.ToError(http.INTERNAL_SERVER_ERROR)
 	}
 	log.InfoLogger.Println(wallet.GetAddressHEX())
-	err = database.AccountToWallet.Put(accountId,
+	err = database.AccountToWallet.Put(fnv64(username),
 		[]string{"id", "address", "private"},
-		[]interface{}{accountId, wallet.GetAddressBase64(), wallet.GetPrivateBase64()},
+		[]interface{}{fnv64(username), wallet.GetAddressBase64(), wallet.GetPrivateBase64()},
 	)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
@@ -28,7 +28,7 @@ func createWallet(accountId uint64) (*ethapi.Wallet, *http.Error) {
 	}
 	err = database.WalletToAccount.Put(wallet.GetAddressBase64(),
 		[]string{"id", "address"},
-		[]interface{}{accountId, wallet.GetAddressBase64()},
+		[]interface{}{fnv64(username), wallet.GetAddressBase64()},
 	)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
@@ -37,8 +37,8 @@ func createWallet(accountId uint64) (*ethapi.Wallet, *http.Error) {
 	return wallet, nil
 }
 
-func getWallet(accountId uint64) (*ethapi.Wallet, *http.Error) {
-	private, getStatus := getPrivate(accountId)
+func getWallet(username string) (*ethapi.Wallet, *http.Error) {
+	private, getStatus := getPrivate(username)
 	if getStatus == nil {
 		wallet, err := ethapi.GetWallet(private)
 		if err != nil {
@@ -51,8 +51,8 @@ func getWallet(accountId uint64) (*ethapi.Wallet, *http.Error) {
 	}
 }
 
-func getAddress(accountId uint64) (*common.Address, *http.Error) {
-	base64Address, found, err := database.AccountToWallet.GetString(accountId, "address")
+func getAddress(username string) (*common.Address, *http.Error) {
+	base64Address, found, err := database.AccountToWallet.GetString(fnv64(username), "address")
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return nil, http.ToError(http.INTERNAL_SERVER_ERROR)
@@ -71,8 +71,8 @@ func getAddress(accountId uint64) (*common.Address, *http.Error) {
 	return address, nil
 }
 
-func getPrivate(accountId uint64) (*ecdsa.PrivateKey, *http.Error) {
-	base64PrivateKey, found, err := database.AccountToWallet.GetString(accountId, "private")
+func getPrivate(username string) (*ecdsa.PrivateKey, *http.Error) {
+	base64PrivateKey, found, err := database.AccountToWallet.GetString(fnv64(username), "private")
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return nil, http.ToError(http.INTERNAL_SERVER_ERROR)
@@ -91,4 +91,15 @@ func getPrivate(accountId uint64) (*ecdsa.PrivateKey, *http.Error) {
 	privateKey, err := crypto.ToECDSA(privateKeyBytes)
 
 	return privateKey, nil
+}
+
+func fnv64(key string) uint64 {
+	hash := uint64(4332272522)
+	const prime64 = uint64(33555238)
+	keyLength := len(key)
+	for i := 0; i < keyLength; i++ {
+		hash *= prime64
+		hash ^= uint64(key[i])
+	}
+	return hash
 }
