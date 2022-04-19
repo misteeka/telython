@@ -56,6 +56,9 @@ func (table *SingleKeyTable) Get(key interface{}, columns []string, data []inter
 func (table *SingleKeyTable) Set(key interface{}, columns []string, values []interface{}) error {
 	return table.Table.Set(key, Columns{Column{Key: table.key, Value: key}}, PlainToColumns(columns, values))
 }
+func (table *SingleKeyTable) Add(key interface{}, columns []string, values []interface{}) error {
+	return table.Table.Add(key, Columns{Column{Key: table.key, Value: key}}, PlainToColumns(columns, values))
+}
 
 func (table *SingleKeyTable) SingleSet(key interface{}, column string, value interface{}) error {
 	return table.Table.Set(key, Columns{Column{Key: table.key, Value: key}}, Columns{Column{

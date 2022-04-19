@@ -246,6 +246,9 @@ func (table *Table) Put(shardKey interface{}, values Columns) error {
 func (table *Table) Set(shardKey interface{}, keys Columns, values Columns) error {
 	return table.Shards[table.GetShardNum(shardKey)].Set(keys, values)
 }
+func (table *Table) Add(shardKey interface{}, keys Columns, values Columns) error {
+	return table.Shards[table.GetShardNum(shardKey)].Add(keys, values)
+}
 func (table *Table) Remove(shardKey interface{}, keys Columns) error {
 	return table.Shards[table.GetShardNum(shardKey)].Remove(keys)
 }

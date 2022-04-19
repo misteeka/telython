@@ -4,14 +4,14 @@ import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"strings"
-	"telython/payments/service/pkg/cfg"
-	"telython/payments/service/pkg/log"
+	"telython/pkg/cfg"
 	"telython/pkg/eplidr"
+	"telython/pkg/log"
 	"time"
 )
 
 var (
-	Accounts   *eplidr.Table
+	Accounts   *eplidr.SingleKeyTable
 	Balances   *eplidr.SingleKeyTable
 	Payments   *eplidr.Table
 	LastActive *eplidr.SingleKeyTable
@@ -36,7 +36,7 @@ func InitDatabase() error {
 		"payments",
 		4,
 		[]string{
-			"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn},`sender` uint64 {nn},`receiver` uint64 {nn},`amount` uint64 {nn},`currency` int {nn},`timestamp` uint64 {nn});",
+			"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn},`sender` uint64 {nn},`receiver` uint64 {nn},`amount` varchar(16)  {nn},`currency` uint64 {nn},`timestamp` uint64 {nn});",
 			"create index index_sender on {table} (sender);",
 			"create index index_receiver on {table} (receiver);",
 			"create index index_serial on {table} (timestamp);",
@@ -46,10 +46,11 @@ func InitDatabase() error {
 	if err != nil {
 		return err
 	}
-	Accounts, err = eplidr.NewTable(
+	Accounts, err = eplidr.NewSingleKeyTable(
 		"accounts",
+		"name",
 		4,
-		[]string{"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn} primary key, `name` varchar(255) {nn}, `currency` int default 0 {nn});"},
+		[]string{"CREATE TABLE IF NOT EXISTS {table} (`nameHash` uint64 primary key {nn}, `name` varchar(255) {nn});"},
 		defaultDriver,
 	)
 	if err != nil {
@@ -59,20 +60,16 @@ func InitDatabase() error {
 		"balances",
 		"id",
 		4,
-		[]string{"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn} primary key, `balance` uint64 {nn} default 0, `onSerial` uint64 {nn} default 0);"},
+		[]string{"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn} primary key, `balance` varchar(16) {nn} default 0, `onSerial` uint64 {nn} default 0);"},
 		defaultDriver,
 	)
 	if err != nil {
 		return err
 	}
 
-	/*LastActive = eplidr.NewSingleKeyTable(
-		"lastactive",
-		"name",
-		1,
-		"",
-		defaultDriver,
-	)*/
+	//Payments.DropUnsafe()
+	//Accounts.Table.DropUnsafe()
+	//Balances.Table.DropUnsafe()
 	return nil
 }
 

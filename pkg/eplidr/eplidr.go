@@ -35,12 +35,12 @@ func KeysToQuery(keys Columns) string {
 	if len(keys) == 0 {
 		return ""
 	}
-	query := "WHERE"
+	query := "WHERE "
 	for i := 0; i < len(keys); i++ {
 		if i == len(keys)-1 {
-			query += fmt.Sprintf("`%s`=%s", keys[i].Key, keys[i].GetStringValue())
+			query += fmt.Sprintf("`%s` = %s", keys[i].Key, keys[i].GetStringValue())
 		} else {
-			query += fmt.Sprintf("`%s`=%s,", keys[i].Key, keys[i].GetStringValue())
+			query += fmt.Sprintf("`%s` = %s,", keys[i].Key, keys[i].GetStringValue())
 		}
 	}
 	return query

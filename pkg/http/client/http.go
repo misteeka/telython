@@ -1,37 +1,56 @@
-package main
+package client
 
 import (
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fastjson"
+	"telython/pkg/http"
 	"time"
 )
 
-const ip = "127.0.0.1" // 192.168.1.237
-
 var client fasthttp.HostClient
-var parserPool fastjson.ParserPool
+var ParserPool fastjson.ParserPool
+var addr string
 
-func init() {
+func Init(_addr string, apiPath string) {
+	if apiPath[0] != '/' {
+		addr = "http://" + _addr + "/" + apiPath
+	} else {
+		addr = "http://" + _addr + apiPath
+	}
 	client = fasthttp.HostClient{
-		Addr:                ip + ":8002",
+		Addr:                _addr,
 		MaxIdleConnDuration: time.Minute,
 		ReadTimeout:         30 * time.Second,
 		WriteTimeout:        30 * time.Second,
 	}
 }
 
+func GetError(value *fastjson.Value) *http.Error {
+	if value == nil {
+		return nil
+	}
+	if value.Exists("error") {
+		return &http.Error{
+			Code:    value.GetUint64("error"),
+			Message: string(value.GetStringBytes("message")),
+		}
+	} else {
+		return nil
+	}
+}
+
 func Get(function string) (*fastjson.Value, error) {
 	req := fasthttp.AcquireRequest()
-	req.SetRequestURI("http://127.0.0.1:8002/payments/" + function)
+	req.SetRequestURI(addr + function)
 	resp := fasthttp.AcquireResponse()
 	err := client.Do(req, resp)
 	fasthttp.ReleaseRequest(req)
 	if err != nil {
 		return nil, err
 	}
-	p := parserPool.Get()
+	p := ParserPool.Get()
 	value, err := p.ParseBytes(resp.Body())
-	parserPool.Put(p)
+	ParserPool.Put(p)
 	if err != nil {
 		return nil, err
 	}
@@ -43,16 +62,16 @@ func Post(function string, json string) (*fastjson.Value, error) {
 	req.SetBody([]byte(json))
 	req.Header.SetMethod("POST")
 	req.Header.SetContentType("application/json")
-	req.SetRequestURI("http://127.0.0.1:8002/payments/" + function)
+	req.SetRequestURI(addr + function)
 	resp := fasthttp.AcquireResponse()
 	err := client.Do(req, resp)
 	fasthttp.ReleaseRequest(req)
 	if err != nil {
 		return nil, err
 	}
-	p := parserPool.Get()
+	p := ParserPool.Get()
 	value, err := p.ParseBytes(resp.Body())
-	parserPool.Put(p)
+	ParserPool.Put(p)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +80,7 @@ func Post(function string, json string) (*fastjson.Value, error) {
 }
 func Put(function string, json string) (*fastjson.Value, error) {
 	req := fasthttp.AcquireRequest()
-	req.SetRequestURI("http://127.0.0.1:8002/payments/" + function)
+	req.SetRequestURI(addr + function)
 	req.Header.SetContentType("application/json")
 	req.Header.SetMethodBytes([]byte("PUT"))
 	req.SetBody([]byte(json))
@@ -71,9 +90,9 @@ func Put(function string, json string) (*fastjson.Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := parserPool.Get()
+	p := ParserPool.Get()
 	value, err := p.ParseBytes(resp.Body())
-	parserPool.Put(p)
+	ParserPool.Put(p)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +101,7 @@ func Put(function string, json string) (*fastjson.Value, error) {
 }
 func Delete(function string, json string) (*fastjson.Value, error) {
 	req := fasthttp.AcquireRequest()
-	req.SetRequestURI("http://127.0.0.1:8002/payments/" + function)
+	req.SetRequestURI(addr + function)
 	req.Header.SetContentType("application/json")
 	req.Header.SetMethodBytes([]byte("DELETE"))
 	req.SetBody([]byte(json))
@@ -92,9 +111,9 @@ func Delete(function string, json string) (*fastjson.Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := parserPool.Get()
+	p := ParserPool.Get()
 	value, err := p.ParseBytes(resp.Body())
-	parserPool.Put(p)
+	ParserPool.Put(p)
 	if err != nil {
 		return nil, err
 	}

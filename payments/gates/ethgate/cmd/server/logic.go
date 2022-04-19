@@ -6,75 +6,89 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"telython/payments/gates/ethgate/pkg/database"
-	"telython/payments/gates/ethgate/pkg/ethapi"
-	"telython/payments/gates/ethgate/pkg/log"
-	"telython/payments/gates/ethgate/pkg/status"
+	ethapi "telython/payments/gates/ethgate/pkg/ethereum/api"
+	"telython/pkg/http"
+	"telython/pkg/log"
 )
 
-func createWallet(accountId uint64) (*ethapi.Wallet, status.Status) {
+func createWallet(accountId uint64) (*ethapi.Wallet, *http.Error) {
 	wallet, err := ethapi.CreateWallet()
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
-		return nil, status.INTERNAL_SERVER_ERROR
+		return nil, http.ToError(http.INTERNAL_SERVER_ERROR)
 	}
-	err = database.Accounts.Put(accountId,
-		[]string{"id", "public", "private"},
-		[]interface{}{accountId, wallet.GetAddressHEX(), wallet.GetPrivateBase64()},
+	log.InfoLogger.Println(wallet.GetAddressHEX())
+	err = database.AccountToWallet.Put(accountId,
+		[]string{"id", "address", "private"},
+		[]interface{}{accountId, wallet.GetAddressBase64(), wallet.GetPrivateBase64()},
 	)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
-		return nil, status.INTERNAL_SERVER_ERROR
+		return nil, http.ToError(http.INTERNAL_SERVER_ERROR)
 	}
-	return wallet, status.SUCCESS
+	err = database.WalletToAccount.Put(wallet.GetAddressBase64(),
+		[]string{"id", "address"},
+		[]interface{}{accountId, wallet.GetAddressBase64()},
+	)
+	if err != nil {
+		log.ErrorLogger.Println(err.Error())
+		return nil, http.ToError(http.INTERNAL_SERVER_ERROR)
+	}
+	return wallet, nil
 }
 
-func getWallet(accountId uint64) (*ethapi.Wallet, status.Status) {
+func getWallet(accountId uint64) (*ethapi.Wallet, *http.Error) {
 	private, getStatus := getPrivate(accountId)
-	if getStatus == status.SUCCESS {
+	if getStatus == nil {
 		wallet, err := ethapi.GetWallet(private)
 		if err != nil {
 			log.ErrorLogger.Println(err.Error())
-			return nil, status.INTERNAL_SERVER_ERROR
+			return nil, http.ToError(http.INTERNAL_SERVER_ERROR)
 		}
-		return wallet, status.SUCCESS
+		return wallet, nil
 	} else {
 		return nil, getStatus
 	}
 }
 
-func getAddress(accountId uint64) (*common.Address, status.Status) {
-	base64PublicKey, found, err := database.Accounts.GetString(accountId, "public")
+func getAddress(accountId uint64) (*common.Address, *http.Error) {
+	base64Address, found, err := database.AccountToWallet.GetString(accountId, "address")
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
-		return nil, status.INTERNAL_SERVER_ERROR
+		return nil, http.ToError(http.INTERNAL_SERVER_ERROR)
 	}
 	if !found {
-		return nil, status.NOT_FOUND
+		return nil, &http.Error{
+			Code:    http.NOT_FOUND,
+			Message: "Wallet Not Found",
+		}
 	}
-	publicKeyBytes, err := base64.StdEncoding.DecodeString(base64PublicKey)
+	address, err := ethapi.Base64ToAddress(base64Address)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
-		return nil, status.INTERNAL_SERVER_ERROR
+		return nil, http.ToError(http.INTERNAL_SERVER_ERROR)
 	}
-
-	return ethapi.PublicKeyBytesToAddress(publicKeyBytes), status.SUCCESS
+	return address, nil
 }
 
-func getPrivate(accountId uint64) (*ecdsa.PrivateKey, status.Status) {
-	base64PrivateKey, found, err := database.Accounts.GetString(accountId, "private")
+func getPrivate(accountId uint64) (*ecdsa.PrivateKey, *http.Error) {
+	base64PrivateKey, found, err := database.AccountToWallet.GetString(accountId, "private")
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
-		return nil, status.INTERNAL_SERVER_ERROR
+		return nil, http.ToError(http.INTERNAL_SERVER_ERROR)
 	}
 	if !found {
-		return nil, status.NOT_FOUND
+		return nil, &http.Error{
+			Code:    http.NOT_FOUND,
+			Message: "Wallet Not Found",
+		}
 	}
 	privateKeyBytes, err := base64.StdEncoding.DecodeString(base64PrivateKey)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
-		return nil, status.INTERNAL_SERVER_ERROR
+		return nil, http.ToError(http.INTERNAL_SERVER_ERROR)
 	}
 	privateKey, err := crypto.ToECDSA(privateKeyBytes)
 
-	return privateKey, status.SUCCESS
+	return privateKey, nil
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/valyala/fastjson"
 	"syscall"
-	"telython/payments/service/pkg/log"
+	"telython/pkg/log"
 )
 
 const configDir = "./config.json"

@@ -1,30 +1,18 @@
-package ethapi
+package api
 
 import (
 	"context"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"log"
-	"math/big"
-	Models "telython/payments/gates/ethgate/pkg/ethapi/models"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"math/big"
+	Models "telython/payments/gates/ethgate/pkg/ethereum/models"
+	"telython/pkg/log"
 )
-
-var Client *ethclient.Client
-
-func Init() error {
-	var err error
-	Client, err = ethclient.Dial("http://localhost:8545")
-	if err != nil {
-		return err
-	}
-	return nil
-}
 
 // GetLatestBlock from blockchain
 func GetLatestBlock(client ethclient.Client) *Models.Block {
@@ -41,7 +29,8 @@ func GetLatestBlock(client ethclient.Client) *Models.Block {
 	block, err := client.BlockByNumber(context.Background(), blockNumber)
 
 	if err != nil {
-		log.Fatal(err)
+		log.ErrorLogger.Println(err.Error())
+		return nil
 	}
 
 	// Build the response to our model
@@ -169,17 +158,7 @@ func GetAddressBalance(client ethclient.Client, address string) (string, error) 
 	return balance.String(), nil
 }
 
-func PrivateToAddress(privateKey *ecdsa.PrivateKey) (*common.Address, bool) {
-	publicKeyECDSA, ok := privateKey.Public().(*ecdsa.PublicKey)
-	if !ok {
-		log.Fatal("error casting public key to ECDSA")
-		return nil, false
-	}
-
-	address := crypto.PubkeyToAddress(*publicKeyECDSA)
-	return &address, true
-}
-
+// CreateWallet returns new wallet object pointer
 func CreateWallet() (*Wallet, error) {
 	key, err := crypto.GenerateKey()
 	if err != nil {
@@ -187,7 +166,7 @@ func CreateWallet() (*Wallet, error) {
 	}
 	address, ok := PrivateToAddress(key)
 	if !ok {
-		return nil, errors.New("")
+		return nil, errors.New("Error casting public key to ECDSA ")
 	}
 	return &Wallet{address, key}, nil
 }

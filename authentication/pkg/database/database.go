@@ -4,17 +4,17 @@ import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"strings"
-	"telython/authentication/pkg/cfg"
-	"telython/authentication/pkg/log"
+	"telython/pkg/cfg"
 	"telython/pkg/eplidr"
+	"telython/pkg/log"
 	"time"
 )
 
 var db *sql.DB
 
 var (
-	Users       *eplidr.Table
-	SingleUsers *eplidr.SingleKeyTable
+	UsersByName  *eplidr.SingleKeyTable
+	UsersByEmail *eplidr.SingleKeyTable
 
 	EmailCodes                *eplidr.SingleKeyTable
 	PendingEmailConfirmations *eplidr.SingleKeyTable
@@ -35,9 +35,9 @@ func InitDatabase() error {
 	db.SetMaxIdleConns(cfg.GetInt("maxIdleConns"))
 	db.SetMaxOpenConns(cfg.GetInt("maxOpenConns"))
 
-	Users, err = eplidr.NewTable(
+	Users, err := eplidr.NewTable(
 		"users",
-		1,
+		2,
 		[]string{
 			`CREATE TABLE IF NOT EXISTS {table} (
 				name varchar(255) primary key {nn},
@@ -48,18 +48,32 @@ func InitDatabase() error {
 				last_ip varchar(40) {nn},
 				reg_ip varchar(40) {nn}
 			);`,
-			"CREATE INDEX index_email ON users(email);",
 		},
 		db,
 	)
 	if err != nil {
 		return err
 	}
-	SingleUsers = eplidr.SingleKeyImplementation(Users, "name")
+	UsersByName = eplidr.SingleKeyImplementation(Users, "name")
+	UsersByEmail, err = eplidr.NewSingleKeyTable(
+		"names_by_email",
+		"email",
+		2,
+		[]string{
+			`CREATE TABLE IF NOT EXISTS {table} (
+				email varchar(255) primary key {nn},
+				name varchar(255) {nn}
+			);`,
+		},
+		db,
+	)
+	if err != nil {
+		return err
+	}
 	EmailCodes, err = eplidr.NewSingleKeyTable(
 		"emailcodes",
 		"name",
-		1,
+		2,
 		[]string{
 			`CREATE TABLE IF NOT EXISTS {table} (
 				name varchar(255) {nn} primary key,
@@ -74,7 +88,7 @@ func InitDatabase() error {
 	PendingEmailConfirmations, err = eplidr.NewSingleKeyTable(
 		"pending_email_confirmations",
 		"name",
-		1,
+		2,
 		[]string{
 			`CREATE TABLE IF NOT EXISTS {table} (
 				name varchar(255) {nn} primary key,
@@ -86,6 +100,10 @@ func InitDatabase() error {
 		},
 		db,
 	)
+
+	//Users.DropUnsafe()
+	//EmailCodes.Table.DropUnsafe()
+	//PendingEmailConfirmations.Table.DropUnsafe()
 	if err != nil {
 		return err
 	}

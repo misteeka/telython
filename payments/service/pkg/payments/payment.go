@@ -2,21 +2,20 @@ package payments
 
 import (
 	"bytes"
-	"encoding/binary"
+	"encoding/base64"
 	"encoding/json"
 	"strconv"
-	"telython/payments/service/pkg/accounts"
+	"telython/payments/pkg/currency"
 	"telython/payments/service/pkg/database"
 	"telython/pkg/eplidr"
 )
 
 type Payment struct {
-	Id        uint64
-	Sender    uint64
-	Receiver  uint64
-	Amount    uint64
-	Timestamp uint64
-	Currency  uint64
+	Id        uint64 // Id unique value for a payment
+	Sender    uint64 // Sender is fvn64 of sender username
+	Receiver  uint64 // Receiver is fvn64 of receiver username
+	Timestamp uint64 // Timestamp UNIX timestamp in microseconds
+	Currency  *currency.Currency
 }
 
 func fnv64(key string) uint64 {
@@ -30,25 +29,24 @@ func fnv64(key string) uint64 {
 	return hash
 }
 
-func New(sender *accounts.Account, receiver *accounts.Account, amount uint64, timestamp uint64) *Payment {
+func New(From uint64, To uint64, currency *currency.Currency, timestamp uint64) *Payment {
 	payment := Payment{
-		Id:        fnv64(strconv.FormatUint(sender.Id, 10) + strconv.FormatUint(receiver.Id, 10) + strconv.FormatUint(timestamp, 10)),
-		Sender:    sender.Id,
-		Receiver:  receiver.Id,
-		Amount:    amount,
-		Currency:  uint64(sender.Currency),
+		Id:        fnv64(strconv.FormatUint(From, 10) + strconv.FormatUint(To, 10) + strconv.FormatUint(timestamp, 10)),
+		Sender:    From,
+		Receiver:  To,
+		Currency:  currency,
 		Timestamp: timestamp,
 	}
 	return &payment
 }
 
 func (payment *Payment) Commit() error {
-	senderShardNum := database.Accounts.GetShardNum(payment.Sender)
-	receiverShardNum := database.Accounts.GetShardNum(payment.Receiver)
+	senderShardNum := database.Accounts.Table.GetShardNum(payment.Sender)
+	receiverShardNum := database.Accounts.Table.GetShardNum(payment.Receiver)
 	err := database.Payments.GetShard(senderShardNum).Put(
 		eplidr.PlainToColumns(
 			[]string{"id", "sender", "receiver", "amount", "timestamp", "currency"},
-			[]interface{}{payment.Id, payment.Sender, payment.Receiver, payment.Amount, payment.Timestamp, payment.Currency},
+			[]interface{}{payment.Id, payment.Sender, payment.Receiver, base64.StdEncoding.EncodeToString(payment.Currency.Amount.Bytes()), payment.Timestamp, payment.Currency.Type.Id},
 		),
 	)
 	if err != nil {
@@ -58,7 +56,7 @@ func (payment *Payment) Commit() error {
 		err = database.Payments.GetShard(receiverShardNum).Put(
 			eplidr.PlainToColumns(
 				[]string{"id", "sender", "receiver", "amount", "timestamp", "currency"},
-				[]interface{}{payment.Id, payment.Sender, payment.Receiver, payment.Amount, payment.Timestamp, payment.Currency},
+				[]interface{}{payment.Id, payment.Sender, payment.Receiver, base64.StdEncoding.EncodeToString(payment.Currency.Amount.Bytes()), payment.Timestamp, payment.Currency.Type.Id},
 			),
 		)
 		if err != nil {
@@ -69,33 +67,34 @@ func (payment *Payment) Commit() error {
 }
 
 func (payment *Payment) Serialize() ([]byte, error) {
-	buff := new(bytes.Buffer)
-	err := binary.Write(buff, binary.BigEndian, payment.Id)
-	if err != nil {
-		return nil, err
-	}
-	err = binary.Write(buff, binary.BigEndian, payment.Sender)
-	if err != nil {
-		return nil, err
-	}
-	err = binary.Write(buff, binary.BigEndian, payment.Receiver)
-	if err != nil {
-		return nil, err
-	}
-	err = binary.Write(buff, binary.BigEndian, payment.Amount)
-	if err != nil {
-		return nil, err
-	}
-	err = binary.Write(buff, binary.BigEndian, payment.Timestamp)
-	if err != nil {
-		return nil, err
-	}
-	err = binary.Write(buff, binary.BigEndian, payment.Currency)
-	if err != nil {
-		return nil, err
-	}
-
-	return buff.Bytes(), nil
+	return payment.SerializeReadable()
+	/*
+		buff := new(bytes.Buffer)
+		err := binary.Write(buff, binary.BigEndian, payment.Id)
+		if err != nil {
+			return nil, err
+		}
+		err = binary.Write(buff, binary.BigEndian, payment.Sender)
+		if err != nil {
+			return nil, err
+		}
+		err = binary.Write(buff, binary.BigEndian, payment.Receiver)
+		if err != nil {
+			return nil, err
+		}
+		err = binary.Write(buff, binary.BigEndian, payment.Amount)
+		if err != nil {
+			return nil, err
+		}
+		err = binary.Write(buff, binary.BigEndian, payment.Timestamp)
+		if err != nil {
+			return nil, err
+		}
+		err = binary.Write(buff, binary.BigEndian, payment.Currency)
+		if err != nil {
+			return nil, err
+		}
+		return buff.Bytes(), nil*/
 }
 
 func (payment Payment) SerializeReadable() ([]byte, error) {
@@ -106,15 +105,13 @@ func (payment Payment) SerializeReadable() ([]byte, error) {
 	return jsonData, nil
 }
 
-func DeserializePayment(serialized []byte) Payment {
-	return Payment{
-		Id:        binary.BigEndian.Uint64(serialized[0:8]),
-		Sender:    binary.BigEndian.Uint64(serialized[8:16]),
-		Receiver:  binary.BigEndian.Uint64(serialized[16:24]),
-		Amount:    binary.BigEndian.Uint64(serialized[24:32]),
-		Timestamp: binary.BigEndian.Uint64(serialized[32:40]),
-		Currency:  binary.BigEndian.Uint64(serialized[40:48]),
+func DeserializePayment(serialized []byte) (Payment, error) {
+	payment := Payment{}
+	err := json.Unmarshal(serialized, &payment)
+	if err != nil {
+		return Payment{}, err
 	}
+	return payment, nil
 }
 
 func SerializePayments(payments []Payment) ([]byte, error) {
@@ -125,14 +122,19 @@ func SerializePayments(payments []Payment) ([]byte, error) {
 			return nil, err
 		}
 		buff.Write(serialized)
+		buff.Write([]byte("\n"))
 	}
 	return buff.Bytes(), nil
 }
 
-func DeserializePayments(serialized []byte) *[]Payment {
+func DeserializePayments(serialized []byte) (*[]Payment, error) {
 	var payments []Payment
 	for i := 0; i < (len(serialized) / 48); i++ {
-		payments = append(payments, DeserializePayment(serialized[i*48:(i+1)*48]))
+		payment, err := DeserializePayment(serialized[i*48 : (i+1)*48])
+		if err != nil {
+			return nil, err
+		}
+		payments = append(payments, payment)
 	}
-	return &payments
+	return &payments, nil
 }

@@ -130,8 +130,24 @@ func (shard *Shard) Set(keys Columns, values Columns) error {
 	}
 	return nil
 }
+func (shard *Shard) Add(keys Columns, values Columns) error {
+	s := ""
+	for i := 0; i < len(values); i++ {
+		if i == len(values)-1 {
+			s += fmt.Sprintf("`%s` = `%s` + %s", values[i].Key, values[i].Key, value(values[i].Value))
+		} else {
+			s += fmt.Sprintf("`%s` = `%s` + %s, ", values[i].Key, values[i].Key, value(values[i].Value))
+		}
+	}
+	query := fmt.Sprintf("UPDATE {table} SET %s %s;", s, KeysToQuery(keys))
+	_, err := shard.Exec(query)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 func (shard *Shard) Remove(keys Columns) error {
-	query := fmt.Sprintf("DELETE FROM `{table}` %s;", KeysToQuery(keys))
+	query := fmt.Sprintf("DELETE FROM {table} %s;", KeysToQuery(keys))
 	_, err := shard.Exec(query)
 	if err != nil {
 		return err
@@ -140,12 +156,10 @@ func (shard *Shard) Remove(keys Columns) error {
 }
 
 func (shard *Shard) Exec(query string) (sql.Result, error) {
-	//log.InfoLogger.Println(query)
 	query = strings.Replace(query, "{table}", fmt.Sprintf("`%s`", shard.table.GetName(shard.num)), 1)
 	return shard.driver.Exec(query)
 }
 func (shard *Shard) Query(query string) (*sql.Rows, error) {
-	//log.InfoLogger.Println(query)
 	query = strings.Replace(query, "{table}", fmt.Sprintf("`%s`", shard.table.GetName(shard.num)), 1)
 	return shard.driver.Query(query)
 }

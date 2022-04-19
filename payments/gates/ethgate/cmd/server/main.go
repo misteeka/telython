@@ -2,11 +2,11 @@ package main
 
 import (
 	"math/rand"
-	"telython/payments/gates/ethgate/pkg/cfg"
 	"telython/payments/gates/ethgate/pkg/database"
-	"telython/payments/gates/ethgate/pkg/ethapi"
-	"telython/payments/gates/ethgate/pkg/http"
-	"telython/payments/gates/ethgate/pkg/log"
+	"telython/payments/gates/ethgate/pkg/ethereum"
+	"telython/pkg/cfg"
+	"telython/pkg/http/server"
+	"telython/pkg/log"
 	"time"
 )
 
@@ -18,28 +18,32 @@ func main() {
 	log.InfoLogger.Println("Loading config...")
 	err = cfg.LoadConfig()
 	if err != nil {
+		log.ErrorLogger.Println(err.Error())
 		goto Shutdown
 	}
 
 	log.InfoLogger.Println("Database start")
 	err = database.InitDatabase()
 	if err != nil {
+		log.ErrorLogger.Println(err.Error())
 		goto Shutdown
 	}
 
-	log.InfoLogger.Println("Ethapi start")
-	err = ethapi.Init()
+	log.InfoLogger.Println("Ethereum Client start")
+	err = ethereum.Init()
 	if err != nil {
+		log.ErrorLogger.Println(err.Error())
 		goto Shutdown
 	}
 
 	log.InfoLogger.Println("Fiber initializing")
-	http.Init()
+	server.Init()
 	registerHandlers()
 
 	log.InfoLogger.Println("Fiber run")
-	err = http.Run()
+	err = server.Run(":8003")
 	if err != nil {
+		log.ErrorLogger.Println(err.Error())
 		goto Shutdown
 	}
 

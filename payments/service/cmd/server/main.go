@@ -3,10 +3,10 @@ package main
 import (
 	"math/rand"
 	"runtime"
-	"telython/payments/service/pkg/cfg"
 	"telython/payments/service/pkg/database"
-	"telython/payments/service/pkg/http"
-	"telython/payments/service/pkg/log"
+	"telython/pkg/cfg"
+	"telython/pkg/http/server"
+	"telython/pkg/log"
 	"time"
 )
 
@@ -27,11 +27,11 @@ func main() {
 	panicIfError(database.InitDatabase())
 
 	log.InfoLogger.Println("Fiber initializing")
-	http.Init()
+	server.Init()
 	registerHandlers()
 
 	log.InfoLogger.Println("Fiber run")
-	panicIfError(http.Run())
+	panicIfError(server.Run(":8002"))
 
 	log.InfoLogger.Println("Shutdown...")
 	log.InfoLogger.Println("Goodbye!")

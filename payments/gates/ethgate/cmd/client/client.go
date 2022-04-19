@@ -3,61 +3,23 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/valyala/fastjson"
 	"math"
 	"os"
 	"strconv"
 	"strings"
-	"telython/payments/gates/ethgate/pkg/status"
+	"telython/payments/gates/ethgate/pkg/client"
+	"telython/pkg/http"
 	"time"
 )
 
-func statusToString(s status.Status) string {
-	if s == status.SUCCESS {
-		return "SUCCESS"
-	}
-	if s == status.INVALID_REQUEST {
-		return "INVALID REQUEST"
-	}
-	if s == status.INTERNAL_SERVER_ERROR {
-		return "INTERNAL SERVER ERROR"
-	}
-	if s == status.AUTHORIZATION_FAILED {
-		return "AUTHORIZATION FAILED"
-	}
-	if s == status.INVALID_CURRENCY_CODE {
-		return "INVALID CURRENCY CODE"
-	}
-	if s == status.CURRENCY_CODE_MISMATCH {
-		return "CURRENCY CODE MISMATCH"
-	}
-	if s == status.WRONG_AMOUNT {
-		return "WRONG AMOUNT"
-	}
-	if s == status.NOT_FOUND {
-		return "NOT FOUND"
-	}
-	if s == status.INSUFFICIENT_FUNDS {
-		return "INSUFFICIENT FUNDS"
-	}
-	if s == status.TOO_MANY_REQUESTS {
-		return "TOO MANY REQUESTS"
-	}
-	return fmt.Sprintf("%v", s)
-}
-
-func getStatus(value *fastjson.Value) status.Status {
-	return status.Status(value.GetInt("status"))
-}
-
-func print(data interface{}, status status.Status, err error, start time.Time) {
+func print(data interface{}, error *http.Error, err error, start time.Time) {
 	duration := math.Round((float64(time.Now().Sub(start).Microseconds())/1000.0)*100) / 100.0
 	if err != nil {
 		fmt.Println("ERR: " + err.Error())
 		return
 	}
-	if status != -1 {
-		fmt.Println(fmt.Sprintf("Status: %s", statusToString(status)))
+	if error != nil {
+		fmt.Println(http.ToReadable(error))
 	}
 	if data != nil {
 		fmt.Println(fmt.Sprintf("Data: %v", data))
@@ -92,8 +54,12 @@ func main() {
 			}
 			//password := args[1]
 			start := time.Now()
-			wallet, status, err := CreateWallet(id)
-			print(wallet, status, err, start)
+			wallet, status, err := client.CreateWallet(id)
+			if wallet == nil {
+				print(nil, status, err, start)
+			} else {
+				print(wallet.GetAddressHEX(), status, err, start)
+			}
 		} else if strings.Compare("getAddress", cmd) == 0 {
 			if len(args) < 1 {
 				fmt.Println("Wrong args")
@@ -106,8 +72,12 @@ func main() {
 			}
 			//password := args[1]
 			start := time.Now()
-			address, status, err := GetAddress(id)
-			print(address, status, err, start)
+			address, status, err := client.GetAddress(id)
+			if address == nil {
+				print(nil, status, err, start)
+			} else {
+				print(address.Hex(), status, err, start)
+			}
 		} else if strings.Compare("getPrivate", cmd) == 0 {
 			if len(args) < 1 {
 				fmt.Println("Wrong args")
@@ -120,7 +90,7 @@ func main() {
 			}
 			//password := args[1]
 			start := time.Now()
-			private, status, err := GetPrivate(id)
+			private, status, err := client.GetPrivate(id)
 			print(private, status, err, start)
 		} else {
 			fmt.Println("Unknown command.")

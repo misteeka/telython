@@ -1,189 +1,193 @@
 package main
 
 import (
+	"encoding/base64"
+	"fmt"
 	"github.com/gofiber/fiber/v2"
+	"math/big"
 	"strconv"
-	"telython/payments/service/pkg/http"
-	"telython/payments/service/pkg/log"
+	"telython/payments/pkg/currency"
 	"telython/payments/service/pkg/payments"
-	"telython/payments/service/pkg/status"
+	"telython/pkg/cfg"
+	"telython/pkg/http"
+	"telython/pkg/http/server"
 )
 
+func DecodeBigInt(base64Int string) (*big.Int, error) {
+	bytes, err := base64.StdEncoding.DecodeString(base64Int)
+	if err != nil {
+		return nil, err
+	}
+	bigint := new(big.Int).SetBytes(bytes)
+	return bigint, nil
+}
+func EncodeBigInt(int big.Int) string {
+	return base64.StdEncoding.EncodeToString(int.Bytes())
+}
+
 func registerHandlers() {
-	http.Post("/payments/sendPayment", http.DefaultHandler(func(ctx *fiber.Ctx) status.Status {
-		data, err := http.Deserialize(ctx.Body())
+	server.Post("/payments/addPayment", server.DefaultHandler(func(ctx *fiber.Ctx) *http.Error {
+		data, err := server.Deserialize(ctx.Body())
 		if err != nil {
-			return status.INVALID_REQUEST
+			return http.ToError(http.INVALID_REQUEST)
 		}
-		sender := data.GetUint64("sender")
-		receiver := data.GetUint64("receiver")
-		amount := data.GetUint64("amount")
+		receiver := string(data.GetStringBytes("receiver"))
+		amount, err := DecodeBigInt(string(data.GetStringBytes("amount")))
+		if err != nil {
+			return http.ToError(http.INVALID_REQUEST)
+		}
+		currencyCode := data.GetUint64("currencyCode")
 		password := string(data.GetStringBytes("password"))
 
-		username, found, err := getUsername(sender)
-		if err != nil {
-			return status.INTERNAL_SERVER_ERROR
-		}
-		if !found {
-			return status.AUTHORIZATION_FAILED
-		}
-
-		authorizationStatus := http.Authorize(username, password)
-		if authorizationStatus == status.SUCCESS {
-			timestamp, timestampStatus := http.GetUniqueTimestamp(username)
-			if timestampStatus == status.SUCCESS {
-				return sendPayment(sender, receiver, amount, timestamp)
+		if password == cfg.GetString("secretKey") {
+			timestamp, timestampError := server.GetUniqueTimestamp("admin")
+			if timestampError == nil {
+				return addPayment(receiver, &currency.Currency{
+					Type:   currency.FromCode(currencyCode),
+					Amount: amount,
+				}, timestamp)
 			} else {
-				return timestampStatus
+				return timestampError
 			}
 		} else {
-			return authorizationStatus
+			return http.ToError(http.AUTHORIZATION_FAILED)
 		}
 	}))
-	http.Get("/payments/getAccountInfo", http.ReturnDataHandler(func(ctx *fiber.Ctx) (status.Status, interface{}) {
-		accountId, err := strconv.ParseUint(ctx.FormValue("a"), 10, 64)
+	server.Post("/payments/sendPayment", server.DefaultHandler(func(ctx *fiber.Ctx) *http.Error {
+		data, err := server.Deserialize(ctx.Body())
 		if err != nil {
-			return status.INVALID_REQUEST, nil
+			return http.ToError(http.INVALID_REQUEST)
 		}
-		password := ctx.FormValue("p")
-
-		username, found, err := getUsername(accountId)
+		sender := string(data.GetStringBytes("sender"))
+		receiver := string(data.GetStringBytes("receiver"))
+		amount, err := DecodeBigInt(string(data.GetStringBytes("amount")))
 		if err != nil {
-			return status.INTERNAL_SERVER_ERROR, nil
+			return http.ToError(http.INVALID_REQUEST)
 		}
-		if !found {
-			return status.AUTHORIZATION_FAILED, nil
-		}
+		currencyCode := data.GetUint64("currency")
+		password := string(data.GetStringBytes("password"))
 
-		authorizationStatus := http.Authorize(username, password)
-		if authorizationStatus == status.SUCCESS {
-			requestStatus, account := getAccountInfo(accountId)
-			if requestStatus != status.SUCCESS {
-				return requestStatus, nil
+		authorizationError := server.Authorize(sender, password)
+		if authorizationError == nil {
+			timestamp, timestampError := server.GetUniqueTimestamp(sender)
+			if timestampError == nil {
+				return sendPayment(sender, receiver, &currency.Currency{
+					Type:   currency.FromCode(currencyCode),
+					Amount: amount,
+				}, timestamp)
+			} else {
+				return timestampError
 			}
-			return requestStatus, http.Serialize(*account)
 		} else {
-			return authorizationStatus, nil
+			return authorizationError
 		}
 	}))
-	http.Get("/payments/getBalance", http.ReturnDataHandler(func(ctx *fiber.Ctx) (status.Status, interface{}) {
-		accountId, err := strconv.ParseUint(ctx.FormValue("a"), 10, 64)
-		if err != nil {
-			return status.INVALID_REQUEST, nil
-		}
+	server.Get("/payments/getAccountInfo", server.ReturnDataHandler(func(ctx *fiber.Ctx) (*http.Error, interface{}) {
+		username := ctx.FormValue("u")
 		password := ctx.FormValue("p")
 
-		username, found, err := getUsername(accountId)
-		if err != nil {
-			log.ErrorLogger.Println(err.Error())
-			return status.INTERNAL_SERVER_ERROR, nil
-		}
-		if !found {
-			return status.AUTHORIZATION_FAILED, nil
-		}
-
-		authorizationStatus := http.Authorize(username, password)
-		if authorizationStatus == status.SUCCESS {
-			return getBalance(accountId)
+		authorizationError := server.Authorize(username, password)
+		if authorizationError == nil {
+			requestError, account := getAccountInfo(username)
+			if requestError != nil {
+				return requestError, nil
+			}
+			return requestError, server.Serialize(*account)
 		} else {
-			return authorizationStatus, nil
+			return authorizationError, nil
 		}
 	}))
-	http.Get("/payments/getHistory", http.ReturnDataHandler(func(ctx *fiber.Ctx) (status.Status, interface{}) {
-		accountId, err := strconv.ParseUint(ctx.FormValue("a"), 10, 64)
+	server.Get("/payments/getBalance", server.ReturnJsonHandler(func(ctx *fiber.Ctx) (*http.Error, interface{}) {
+		username := ctx.FormValue("u")
+		password := ctx.FormValue("p")
+		currencyCode, err := strconv.ParseUint(ctx.FormValue("c"), 10, 64)
 		if err != nil {
-			return status.INVALID_REQUEST, nil
+			return http.ToError(http.INVALID_REQUEST), nil
 		}
+		authorizationError := server.Authorize(username, password)
+		if authorizationError == nil {
+			getError, balance := getBalance(username, currencyCode)
+			if getError == nil {
+				return nil, fmt.Sprintf(`{"balance":"%s"}`, base64.StdEncoding.EncodeToString(balance.Bytes()))
+			} else {
+				return getError, nil
+			}
+		} else {
+			return authorizationError, nil
+		}
+	}))
+	server.Get("/payments/getHistory", server.ReturnDataHandler(func(ctx *fiber.Ctx) (*http.Error, interface{}) {
+		username := ctx.FormValue("u")
 		password := ctx.FormValue("p")
 
-		username, found, err := getUsername(accountId)
-		if err != nil {
-			return status.INTERNAL_SERVER_ERROR, nil
-		}
-		if !found {
-			return status.AUTHORIZATION_FAILED, nil
-		}
-
-		authorizationStatus := http.Authorize(username, password)
-		if authorizationStatus == status.SUCCESS {
-			requestStatus, history := getHistory(accountId)
-			if requestStatus != status.SUCCESS {
-				return requestStatus, nil
+		authorizationError := server.Authorize(username, password)
+		if authorizationError == nil {
+			requestError, history := getHistory(username)
+			if requestError != nil {
+				return requestError, nil
 			}
 			bytes, err := payments.SerializePayments(*history)
 			if err != nil {
-				return status.INTERNAL_SERVER_ERROR, nil
+				return http.ToError(http.INTERNAL_SERVER_ERROR), nil
 			}
-			return status.SUCCESS, bytes
+			return nil, bytes
 		} else {
-			return authorizationStatus, nil
+			return authorizationError, nil
 		}
 	}))
-	http.Get("/payments/getPayment", http.ReturnDataHandler(func(ctx *fiber.Ctx) (status.Status, interface{}) {
+	server.Get("/payments/getPayment", server.ReturnJsonHandler(func(ctx *fiber.Ctx) (*http.Error, interface{}) {
 		paymentId, err := strconv.ParseUint(ctx.FormValue("id"), 10, 64)
 		if err != nil {
-			return status.INVALID_REQUEST, nil
+			return http.ToError(http.INVALID_REQUEST), nil
 		}
-		senderId, err := strconv.ParseUint(ctx.FormValue("sender"), 10, 64)
-		if err != nil {
-			return status.INVALID_REQUEST, nil
-		}
+		sender := ctx.FormValue("s")
 		requesterType := ctx.FormValue("t")
 		password := ctx.FormValue("p")
 
 		if requesterType == "sender" {
-			username, found, err := getUsername(senderId)
-			if err != nil {
-				return status.INTERNAL_SERVER_ERROR, nil
-			}
-			if !found {
-				return status.AUTHORIZATION_FAILED, nil
-			}
-			authorizationStatus := http.Authorize(username, password)
-			if authorizationStatus != status.SUCCESS {
-				return authorizationStatus, nil
+			authorizationError := server.Authorize(sender, password)
+			if authorizationError != nil {
+				return authorizationError, nil
 			}
 		}
 
-		getStatus, payment := getPayment(paymentId, senderId)
-		if getStatus != status.SUCCESS {
-			return getStatus, nil
+		getError, payment := getPayment(paymentId, sender)
+		if getError != nil {
+			return getError, nil
 		} else {
 			if requesterType == "receiver" {
 				username, found, err := getUsername(payment.Receiver)
 				if err != nil {
-					return status.INTERNAL_SERVER_ERROR, nil
+					return http.ToError(http.INTERNAL_SERVER_ERROR), nil
 				}
 				if !found {
-					return status.AUTHORIZATION_FAILED, nil
+					return &http.Error{
+						Code:    http.AUTHORIZATION_FAILED,
+						Message: "Account Not Found",
+					}, nil
 				}
-				authorizationStatus := http.Authorize(username, password)
-				if authorizationStatus != status.SUCCESS {
-					return authorizationStatus, nil
+				authorizationError := server.Authorize(username, password)
+				if authorizationError != nil {
+					return authorizationError, nil
 				}
 			}
-			return status.SUCCESS, http.Serialize(*payment)
+			return nil, *payment
 		}
 	}))
-	http.Post("/payments/createAccount", http.ReturnDataHandler(func(ctx *fiber.Ctx) (status.Status, interface{}) {
-		data, err := http.Deserialize(ctx.Body())
+	server.Post("/payments/createAccount", server.DefaultHandler(func(ctx *fiber.Ctx) *http.Error {
+		data, err := server.Deserialize(ctx.Body())
 		if err != nil {
-			return status.INVALID_REQUEST, nil
+			return http.ToError(http.INVALID_REQUEST)
 		}
 		username := string(data.GetStringBytes("username"))
-		currency := data.GetInt("currency")
 		password := string(data.GetStringBytes("password"))
 
-		authorizationStatus := http.Authorize(username, password)
-		if authorizationStatus == status.SUCCESS {
-			timestamp, timestampStatus := http.GetUniqueTimestamp(username)
-			if timestampStatus == status.SUCCESS {
-				return createAccount(username, currency, timestamp)
-			} else {
-				return timestampStatus, nil
-			}
-		} else {
-			return authorizationStatus, nil
+		authorizationError := server.Authorize(username, password)
+		if authorizationError != nil {
+			return authorizationError
 		}
+
+		requestError := createAccount(username)
+		return requestError
 	}))
 }

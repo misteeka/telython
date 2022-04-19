@@ -1,4 +1,4 @@
-package ethapi
+package api
 
 import (
 	"context"
@@ -14,29 +14,10 @@ import (
 	"math/big"
 )
 
+// Wallet data structure
 type Wallet struct {
 	Address *common.Address
 	Private *ecdsa.PrivateKey
-}
-
-func PublicBase64ToAddress(publicBase64 string) (*common.Address, error) {
-	publicBytes, err := base64.StdEncoding.DecodeString(publicBase64)
-	if err != nil {
-		return nil, err
-	}
-	return PublicKeyBytesToAddress(publicBytes), nil
-}
-
-func Base64ToPrivate(privateBase64 string) (*ecdsa.PrivateKey, error) {
-	privateBytes, err := base64.StdEncoding.DecodeString(privateBase64)
-	if err != nil {
-		return nil, err
-	}
-	privateKey, err := crypto.ToECDSA(privateBytes)
-	if err != nil {
-		return nil, err
-	}
-	return privateKey, nil
 }
 
 func GetWallet(private *ecdsa.PrivateKey) (*Wallet, error) {
@@ -60,7 +41,7 @@ func (account *Wallet) GetAddressHEX() string {
 }
 
 func (account *Wallet) GetAddressBase64() string {
-	return base64.StdEncoding.EncodeToString(account.Address.Bytes())
+	return AddressToBase64(account.Address)
 }
 
 func PrivateToBase64(privateKey *ecdsa.PrivateKey) string {

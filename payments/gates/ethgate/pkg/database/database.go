@@ -4,14 +4,15 @@ import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"strings"
-	"telython/payments/gates/ethgate/pkg/cfg"
-	"telython/payments/gates/ethgate/pkg/log"
+	"telython/pkg/cfg"
 	"telython/pkg/eplidr"
+	"telython/pkg/log"
 	"time"
 )
 
 var (
-	Accounts *eplidr.SingleKeyTable
+	AccountToWallet *eplidr.SingleKeyTable
+	WalletToAccount *eplidr.SingleKeyTable
 )
 
 func InitDatabase() error {
@@ -29,16 +30,27 @@ func InitDatabase() error {
 	defaultDriver.SetMaxIdleConns(cfg.GetInt("maxIdleConns"))
 	defaultDriver.SetMaxOpenConns(cfg.GetInt("maxOpenConns"))
 
-	Accounts, err = eplidr.NewSingleKeyTable(
-		"accounts",
+	AccountToWallet, err = eplidr.NewSingleKeyTable(
+		"account_to_wallet",
 		"id",
-		4,
-		[]string{"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn} primary key, `public` varchar(128) {nn}, `private` varchar(128) {nn});"},
+		2,
+		[]string{
+			"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn} primary key, `address` varchar(128) {nn}, `private` varchar(128) {nn});",
+		},
 		defaultDriver,
 	)
 	if err != nil {
 		return err
 	}
+	WalletToAccount, err = eplidr.NewSingleKeyTable(
+		"wallet_to_account",
+		"address",
+		2,
+		[]string{
+			"CREATE TABLE IF NOT EXISTS {table} (`address` varchar(128) {nn} primary key, `id` uint64 {nn});",
+		},
+		defaultDriver,
+	)
 	return nil
 }
 
