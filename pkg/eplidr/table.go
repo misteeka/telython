@@ -139,7 +139,7 @@ func (table *Table) init() error {
 	return nil
 }
 
-func (table *Table) GetStringMultiple(shardKey interface{}, keys Columns, column string) (string, bool, error) {
+func (table *Table) GetStringMultiple(shardKey interface{}, keys Keys, column string) (string, bool, error) {
 	var result string
 	err, found := table.Get(shardKey, keys, []string{column}, []interface{}{&result})
 	if err != nil {
@@ -147,7 +147,7 @@ func (table *Table) GetStringMultiple(shardKey interface{}, keys Columns, column
 	}
 	return result, found, nil
 }
-func (table *Table) GetIntMultiple(shardKey interface{}, keys Columns, column string) (int, bool, error) {
+func (table *Table) GetIntMultiple(shardKey interface{}, keys Keys, column string) (int, bool, error) {
 	var result int
 	err, found := table.Get(shardKey, keys, []string{column}, []interface{}{&result})
 	if err != nil {
@@ -155,7 +155,7 @@ func (table *Table) GetIntMultiple(shardKey interface{}, keys Columns, column st
 	}
 	return result, found, nil
 }
-func (table *Table) GetInt64Multiple(shardKey interface{}, keys Columns, column string) (int64, bool, error) {
+func (table *Table) GetInt64Multiple(shardKey interface{}, keys Keys, column string) (int64, bool, error) {
 	var result int64
 	err, found := table.Get(shardKey, keys, []string{column}, []interface{}{&result})
 	if err != nil {
@@ -163,7 +163,7 @@ func (table *Table) GetInt64Multiple(shardKey interface{}, keys Columns, column 
 	}
 	return result, found, nil
 }
-func (table *Table) GetFloatMultiple(shardKey interface{}, keys Columns, column string) (float64, bool, error) {
+func (table *Table) GetFloatMultiple(shardKey interface{}, keys Keys, column string) (float64, bool, error) {
 	var result float64
 	err, found := table.Get(shardKey, keys, []string{column}, []interface{}{&result})
 	if err != nil {
@@ -171,7 +171,7 @@ func (table *Table) GetFloatMultiple(shardKey interface{}, keys Columns, column 
 	}
 	return result, found, nil
 }
-func (table *Table) GetUintMultiple(shardKey interface{}, keys Columns, column string) (uint64, bool, error) {
+func (table *Table) GetUintMultiple(shardKey interface{}, keys Keys, column string) (uint64, bool, error) {
 	var result uint64
 	err, found := table.Get(shardKey, keys, []string{column}, []interface{}{&result})
 	if err != nil {
@@ -179,7 +179,7 @@ func (table *Table) GetUintMultiple(shardKey interface{}, keys Columns, column s
 	}
 	return result, found, nil
 }
-func (table *Table) GetBooleanMultiple(shardKey interface{}, keys Columns, column string) (bool, bool, error) {
+func (table *Table) GetBooleanMultiple(shardKey interface{}, keys Keys, column string) (bool, bool, error) {
 	var result bool
 	err, found := table.Get(shardKey, keys, []string{column}, []interface{}{&result})
 	if err != nil {
@@ -188,68 +188,68 @@ func (table *Table) GetBooleanMultiple(shardKey interface{}, keys Columns, colum
 	return result, found, nil
 }
 
-func (table *Table) GetString(key Column, column string) (string, bool, error) {
+func (table *Table) GetString(key Key, column string) (string, bool, error) {
 	var result string
-	err, found := table.Get(key.Value, Columns{key}, []string{column}, []interface{}{&result})
+	err, found := table.Get(key.Value, Keys{key}, []string{column}, []interface{}{&result})
 	if err != nil {
 		return "", found, err
 	}
 	return result, found, nil
 }
-func (table *Table) GetInt(key Column, column string) (int, bool, error) {
+func (table *Table) GetInt(key Key, column string) (int, bool, error) {
 	var result int
-	err, found := table.Get(key.Value, Columns{key}, []string{column}, []interface{}{&result})
+	err, found := table.Get(key.Value, Keys{key}, []string{column}, []interface{}{&result})
 	if err != nil {
 		return 0, found, err
 	}
 	return result, found, nil
 }
-func (table *Table) GetInt64(key Column, column string) (int64, bool, error) {
+func (table *Table) GetInt64(key Key, column string) (int64, bool, error) {
 	var result int64
-	err, found := table.Get(key.Value, Columns{key}, []string{column}, []interface{}{&result})
+	err, found := table.Get(key.Value, Keys{key}, []string{column}, []interface{}{&result})
 	if err != nil {
 		return 0, found, err
 	}
 	return result, found, nil
 }
-func (table *Table) GetFloat(key Column, column string) (float64, bool, error) {
+func (table *Table) GetFloat(key Key, column string) (float64, bool, error) {
 	var result float64
-	err, found := table.Get(key.Value, Columns{key}, []string{column}, []interface{}{&result})
+	err, found := table.Get(key.Value, Keys{key}, []string{column}, []interface{}{&result})
 	if err != nil {
 		return 0, found, err
 	}
 	return result, found, nil
 }
-func (table *Table) GetUint(key Column, column string) (uint64, bool, error) {
+func (table *Table) GetUint(key Key, column string) (uint64, bool, error) {
 	var result uint64
-	err, found := table.Get(key.Value, Columns{key}, []string{column}, []interface{}{&result})
+	err, found := table.Get(key.Value, Keys{key}, []string{column}, []interface{}{&result})
 	if err != nil {
 		return 0, found, err
 	}
 	return result, found, nil
 }
-func (table *Table) GetBoolean(key Column, column string) (bool, bool, error) {
+func (table *Table) GetBoolean(key Key, column string) (bool, bool, error) {
 	var result bool
-	err, found := table.Get(key.Value, Columns{key}, []string{column}, []interface{}{&result})
+	err, found := table.Get(key.Value, Keys{key}, []string{column}, []interface{}{&result})
 	if err != nil {
 		return false, found, err
 	}
 	return result, found, nil
 }
 
-func (table *Table) Get(shardKey interface{}, keys Columns, columns []string, data []interface{}) (error, bool) {
+func (table *Table) Get(shardKey interface{}, keys Keys, columns []string, data []interface{}) (error, bool) {
 	return table.Shards[table.GetShardNum(shardKey)].Get(keys, columns, data)
 }
 func (table *Table) Put(shardKey interface{}, values Columns) error {
 	return table.Shards[table.GetShardNum(shardKey)].Put(values)
 }
-func (table *Table) Set(shardKey interface{}, keys Columns, values Columns) error {
+func (table *Table) Set(shardKey interface{}, keys Keys, values Columns) error {
 	return table.Shards[table.GetShardNum(shardKey)].Set(keys, values)
 }
-func (table *Table) Add(shardKey interface{}, keys Columns, values Columns) error {
+func (table *Table) Add(shardKey interface{}, keys Keys, values Columns) error {
 	return table.Shards[table.GetShardNum(shardKey)].Add(keys, values)
 }
-func (table *Table) Remove(shardKey interface{}, keys Columns) error {
+func (table *Table) Remove(shardKey interface{}, keys Keys) error {
 	return table.Shards[table.GetShardNum(shardKey)].Remove(keys)
 }
 
@@ -266,7 +266,7 @@ func (table *Table) ReleaseRows(rows *sql.Rows) error {
 	return rows.Close()
 }
 
-func (table *Table) SingleSet(shardKey interface{}, keys Columns, column Column) error {
+func (table *Table) SingleSet(shardKey interface{}, keys Keys, column Column) error {
 	return table.Set(shardKey, keys, Columns{column})
 }
 

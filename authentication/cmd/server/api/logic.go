@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"telython/authentication/cmd/server/mail"
 	"telython/authentication/pkg/database"
+	"telython/pkg/eplidr"
 	"telython/pkg/http"
 	"telython/pkg/log"
 	"time"
@@ -49,7 +50,7 @@ func isUsernameExists(username string) (bool, error) {
 func signIn(username string, password string, ip string) *http.Error {
 	checkResponse := checkPassword(username, password)
 	if checkResponse == nil {
-		err := database.UsersByName.Set(username, []string{"last_ip", "last_login"}, []interface{}{ip, time.Now().UnixMicro()})
+		err := database.UsersByName.Set(username, eplidr.Columns{{"last_ip", ip}, {"last_login", time.Now().UnixMicro()}})
 		if err != nil {
 			log.ErrorLogger.Println(err.Error())
 			return http.ToError(http.INTERNAL_SERVER_ERROR)
@@ -67,7 +68,7 @@ func checkPassword(username string, password string) *http.Error {
 	}
 	if !found {
 		return &http.Error{
-			Code:    http.AUTHORIZATION_FAILED,
+			Code:    http.NOT_FOUND,
 			Message: "Account Not Found!",
 		}
 	}

@@ -15,6 +15,17 @@ import (
 	"time"
 )
 
+func fnv64(key string) uint64 {
+	hash := uint64(4332272522)
+	const prime64 = uint64(33555238)
+	keyLength := len(key)
+	for i := 0; i < keyLength; i++ {
+		hash *= prime64
+		hash ^= uint64(key[i])
+	}
+	return hash
+}
+
 func print(data interface{}, error *http.Error, err error, start time.Time) {
 	duration := math.Round((float64(time.Now().Sub(start).Microseconds())/1000.0)*100) / 100.0
 	if err != nil {
@@ -60,14 +71,23 @@ func main() {
 		cmd := parts[0]
 		args := parts[1:]
 		if strings.Compare("getBalance", cmd) == 0 {
-			if len(args) < 2 {
+			if len(args) < 3 {
 				fmt.Println("Wrong args")
 				continue
 			}
 			username := args[0]
 			password := args[1]
+			currencyCode, err := strconv.ParseUint(args[2], 10, 64)
+			if err != nil {
+				fmt.Println(err.Error())
+				continue
+			}
 			start := time.Now()
-			currency, status, err := client.GetBalance(username, password)
+			amount, status, err := client.GetBalance(username, password, currencyCode)
+			currency := &currency.Currency{
+				Type:   currency.FromCode(currencyCode),
+				Amount: amount,
+			}
 			print(currency.Readable(), status, err, start)
 		} else if strings.Compare("createAccount", cmd) == 0 {
 			if len(args) < 2 {
@@ -91,20 +111,25 @@ func main() {
 				fmt.Println("Wrong amount")
 				continue
 			}
-			currencyCode, err := strconv.ParseUint(args[3], 10, 64)
+			currencyFrom, err := strconv.ParseUint(args[3], 10, 64)
 			if err != nil {
 				fmt.Println(err.Error())
 				continue
 			}
-			password := args[3]
+			currencyTo, err := strconv.ParseUint(args[4], 10, 64)
+			if err != nil {
+				fmt.Println(err.Error())
+				continue
+			}
+			password := args[5]
 			start := time.Now()
-			status, err := client.SendPayment(sender, receiver, &currency.Currency{
-				Type:   currency.FromCode(currencyCode),
+			status, err := client.SendPayment(sender, fnv64(receiver), &currency.Currency{
+				Type:   currency.FromCode(currencyFrom),
 				Amount: amount,
-			}, password)
+			}, currencyTo, password)
 			print(nil, status, err, start)
 		} else if strings.Compare("addPayment", cmd) == 0 {
-			if len(args) < 3 {
+			if len(args) < 4 {
 				fmt.Println("Wrong args")
 				continue
 			}
@@ -119,12 +144,12 @@ func main() {
 				fmt.Println(err.Error())
 				continue
 			}
-			password := args[3]
+			secretKey := args[3]
 			start := time.Now()
-			requestError, err := client.AddPayment(receiver, &currency.Currency{
+			requestError, err := client.AddPayment(fnv64(receiver), &currency.Currency{
 				Type:   currency.FromCode(currencyCode),
 				Amount: amount,
-			}, password)
+			}, secretKey)
 			if err != nil {
 				return
 			}

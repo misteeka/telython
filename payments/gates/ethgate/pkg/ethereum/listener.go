@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"telython/payments/gates/ethgate/pkg/database"
 	ethapi "telython/payments/gates/ethgate/pkg/ethereum/api"
+	"telython/payments/pkg/currency"
 	tpay "telython/payments/service/pkg/client"
 	"telython/pkg/log"
 )
@@ -60,7 +61,11 @@ func newBlockHandler() {
 					if !found {
 						continue
 					}
-					paymentError, err := tpay.AddPayment(accountId, tx.Value(), "secret")
+					currency := &currency.Currency{
+						Amount: tx.Value(),
+						Type:   currency.Types["ETH"],
+					}
+					paymentError, err := tpay.AddPayment(accountId, currency, "secret")
 					if err != nil {
 						log.ErrorLogger.Println(err.Error())
 						continue

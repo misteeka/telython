@@ -1,97 +1,87 @@
 package main
 
 import (
-	"fmt"
 	"math/big"
+	exchange "telython/payments/exchange/pkg/client"
 	"telython/payments/pkg/currency"
 	"telython/payments/service/pkg/accounts"
 	"telython/payments/service/pkg/database"
 	"telython/payments/service/pkg/payments"
+	"telython/pkg/cfg"
 	"telython/pkg/eplidr"
 	"telython/pkg/http"
 	"telython/pkg/log"
+	"telython/pkg/utils"
 )
 
-func getUsername(nameHash uint64) (string, bool, error) {
-	return database.Accounts.GetString(nameHash, "name")
+func getUsername(id uint64) (string, bool, error) {
+	return database.Accounts.GetString(id, "name")
 }
 
-func sendPayment(senderName string, receiverName string, currency *currency.Currency, timestamp uint64) *http.Error {
-	// check amount
-	if currency.Amount.Cmp(big.NewInt(0)) <= 0 {
+func sendPayment(senderId uint64, receiverId uint64, currencyFrom *currency.Currency, currencyCodeTo uint64, timestamp uint64) *http.Error {
+	// Check amount
+	if currencyFrom.Amount.Cmp(big.NewInt(0)) <= 0 {
 		return &http.Error{
 			Code:    http.WRONG_AMOUNT,
 			Message: "Amount Must Be More Than 0 ",
 		}
 	}
 
-	// check currency code mismatch
-	senderId, found, err := accounts.GetId(senderName)
+	// Check do accounts exists
+	exists, err := accounts.Exists(senderId)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return http.ToError(http.INTERNAL_SERVER_ERROR)
 	}
-	if !found {
+	if !exists {
 		return &http.Error{
 			Code:    http.NOT_FOUND,
-			Message: "Account Not Found!",
+			Message: "Sender Not Found!",
 		}
 	}
-	receiverId, found, err := accounts.GetId(receiverName)
+	exists, err = accounts.Exists(receiverId)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return http.ToError(http.INTERNAL_SERVER_ERROR)
 	}
-	if !found {
-		return &http.Error{
-			Code:    http.NOT_FOUND,
-			Message: "Account Not Found!",
-		}
-	}
-
-	balance, err := accounts.GetBalance(senderId, currency.Type.Id)
-	if err != nil {
-		log.ErrorLogger.Println(err.Error())
-		return http.ToError(http.INTERNAL_SERVER_ERROR)
-	}
-	if balance.Cmp(currency.Amount) < 0 {
-		return &http.Error{
-			Code:    http.INSUFFICIENT_FUNDS,
-			Message: "Insufficient Funds, Top Up Your Balance First",
-		}
-	}
-	payment := payments.New(senderId, receiverId, currency, timestamp)
-
-	err = payment.Commit()
-	if err != nil {
-		log.ErrorLogger.Println(err.Error())
-		return http.ToError(http.INTERNAL_SERVER_ERROR)
-	}
-	return nil
-}
-
-func addPayment(receiverName string, currency *currency.Currency, timestamp uint64) *http.Error {
-	// check amount
-	if currency.Amount.Cmp(big.NewInt(0)) <= 0 {
-		return &http.Error{
-			Code:    http.WRONG_AMOUNT,
-			Message: "Amount Must Be More Than 0 ",
-		}
-	}
-
-	receiverId, found, err := accounts.GetId(receiverName)
-	if err != nil {
-		log.ErrorLogger.Println(err.Error())
-		return http.ToError(http.INTERNAL_SERVER_ERROR)
-	}
-	if !found {
+	if !exists {
 		return &http.Error{
 			Code:    http.NOT_FOUND,
 			Message: "Receiver Not Found!",
 		}
 	}
 
-	payment := payments.New(0, receiverId, currency, timestamp)
+	var currencyTo *currency.Currency
+	if currencyFrom.Type.Id != currencyCodeTo {
+		var requestError *http.Error
+		requestError, currencyTo, err = exchange.Convert(currencyFrom, currencyCodeTo, cfg.GetString("secretKey"))
+		if err != nil {
+			log.ErrorLogger.Println(err.Error())
+			return http.ToError(http.INTERNAL_SERVER_ERROR)
+		}
+		if requestError != nil {
+			log.ErrorLogger.Println(requestError.Serialize())
+			return http.ToError(http.INTERNAL_SERVER_ERROR)
+		}
+	} else {
+		currencyTo = currencyFrom
+	}
+
+	// Check balance
+	balance, err := accounts.GetBalance(senderId, currencyFrom.Type.Id)
+	if err != nil {
+		log.ErrorLogger.Println(err.Error())
+		return http.ToError(http.INTERNAL_SERVER_ERROR)
+	}
+	if balance.Cmp(currencyFrom.Amount) < 0 {
+		return &http.Error{
+			Code:    http.INSUFFICIENT_FUNDS,
+			Message: "Insufficient Funds, Top Up Your Balance First",
+		}
+	}
+
+	// Process payment
+	payment := payments.New(senderId, receiverId, currencyFrom, currencyTo, timestamp)
 
 	err = payment.Commit()
 	if err != nil {
@@ -101,13 +91,40 @@ func addPayment(receiverName string, currency *currency.Currency, timestamp uint
 	return nil
 }
 
-func getBalance(username string, currencyCode uint64) (*http.Error, *big.Int) {
-	accountId, found, err := accounts.GetId(username)
+func addPayment(receiverId uint64, currency *currency.Currency, timestamp uint64) *http.Error {
+
+	exists, err := accounts.Exists(receiverId)
+	if err != nil {
+		log.ErrorLogger.Println(err.Error())
+		return http.ToError(http.INTERNAL_SERVER_ERROR)
+	}
+	if !exists {
+		return &http.Error{
+			Code:    http.NOT_FOUND,
+			Message: "Receiver Not Found!",
+		}
+	}
+
+	payment := payments.New(0, receiverId, currency, currency, timestamp)
+
+	err = payment.Commit()
+	if err != nil {
+		log.ErrorLogger.Println(err.Error())
+		return http.ToError(http.INTERNAL_SERVER_ERROR)
+	}
+	return nil
+}
+
+func getBalance(accountId uint64, currencyCode uint64) (*http.Error, *big.Int) {
+	if currency.FromCode(currencyCode) == nil {
+		return http.ToError(http.INVALID_CURRENCY_CODE), nil
+	}
+	exists, err := accounts.Exists(accountId)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return http.ToError(http.INTERNAL_SERVER_ERROR), nil
 	}
-	if !found {
+	if !exists {
 		return &http.Error{
 			Code:    http.NOT_FOUND,
 			Message: "Account Not Found!",
@@ -121,13 +138,14 @@ func getBalance(username string, currencyCode uint64) (*http.Error, *big.Int) {
 	return nil, balance
 }
 
-func getHistory(username string) (*http.Error, *[]payments.Payment) {
-	accountId, found, err := accounts.GetId(username)
+func getHistory(accountId uint64) (*http.Error, *[]payments.Payment) {
+	/* TODO
+	exists, err := accounts.Exists(accountId)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return http.ToError(http.INTERNAL_SERVER_ERROR), nil
 	}
-	if !found {
+	if !exists {
 		return &http.Error{
 			Code:    http.NOT_FOUND,
 			Message: "Account Not Found!",
@@ -155,11 +173,11 @@ func getHistory(username string) (*http.Error, *[]payments.Payment) {
 		payment.Currency = currency
 		history = append(history, payment)
 	}
-	return nil, &history
+	return nil, &history*/return nil, nil
 }
 
-func getAccountInfo(username string) (*http.Error, *accounts.AccountInfo) {
-	accountInfo, err := accounts.GetAccountInfo(fnv64(username))
+func getAccountInfo(accountId uint64) (*http.Error, *accounts.AccountInfo) {
+	accountInfo, err := accounts.GetAccountInfo(accountId)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return http.ToError(http.INTERNAL_SERVER_ERROR), nil
@@ -167,16 +185,15 @@ func getAccountInfo(username string) (*http.Error, *accounts.AccountInfo) {
 	return nil, accountInfo
 }
 
-func getPayment(id uint64, username string) (*http.Error, *payments.Payment) {
+func getPayment(id uint64, accountId uint64) (*http.Error, *payments.Payment) {
 	payment := payments.Payment{
 		Id: id,
 	}
 	var currencyCode uint64
 	var amountBase64 string
-	nameHash := fnv64(username)
-	err, found := database.Payments.Get(
-		nameHash,
-		eplidr.PlainToColumns([]string{"id"}, []interface{}{id}),
+	err, found := database.Payments.Get( // TODO
+		accountId,
+		eplidr.Keys{{"id", id}},
 		[]string{"sender", "receiver", "amount", "timestamp", "currency"},
 		[]interface{}{&payment.Sender, &payment.Receiver, &amountBase64, &payment.Timestamp, &currencyCode},
 	)
@@ -204,10 +221,11 @@ func fnv64(key string) uint64 {
 	return hash
 }
 
-func createAccount(username string) *http.Error {
-	nameHash := fnv64(username)
-	_, found, err := database.Accounts.GetString(nameHash, "name")
+func createAccount(username string, timestamp uint64) *http.Error {
+	accountId := fnv64(username)
+	_, found, err := database.Accounts.GetString(accountId, "name")
 	if err != nil {
+		log.ErrorLogger.Println(err.Error())
 		return http.ToError(http.INTERNAL_SERVER_ERROR)
 	}
 	if found {
@@ -216,11 +234,19 @@ func createAccount(username string) *http.Error {
 			Message: "Account For User Already Created!",
 		}
 	}
-	err = database.Accounts.Put(nameHash, []string{"name", "nameHash"}, []interface{}{username, nameHash})
+	err = database.Accounts.Put(accountId, []string{"name", "id"}, []interface{}{username, accountId})
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return http.ToError(http.INTERNAL_SERVER_ERROR)
 	}
+	go func() {
+		for _, Type := range currency.Types {
+			err = database.Balances.Put(accountId, eplidr.Columns{{"id", accountId}, {"balance", utils.EncodeBigInt(new(big.Int).SetInt64(0))}, {"onSerial", timestamp}, {"currency", Type.Id}})
+			if err != nil {
+				log.ErrorLogger.Println(err.Error())
+			}
+		}
+	}()
 	return nil
 }
 

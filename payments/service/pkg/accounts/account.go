@@ -6,6 +6,10 @@ import (
 	"math/big"
 	"telython/payments/pkg/currency"
 	"telython/payments/service/pkg/database"
+	"telython/pkg/eplidr"
+	"telython/pkg/log"
+	"telython/pkg/utils"
+	"time"
 )
 
 // SELECT `amount` FROM `payments2` WHERE `sender` = 15381326603262689376 AND `serial` > 0
@@ -21,16 +25,18 @@ func fnv64(key string) uint64 {
 	return hash
 }
 
-func GetBalance(nameHash uint64, currencyCode uint64) (*big.Int, error) {
-	rows, err := database.Balances.Query(fmt.Sprintf("SELECT `balance`, `onSerial` FROM {table} WHERE `id` = %d AND `currency` = %d;", nameHash, currencyCode), nameHash)
+func GetBalance(accountId uint64, currencyCode uint64) (*big.Int, error) {
+	rows, err := database.Balances.Query(fmt.Sprintf("SELECT `balance`, `onSerial` FROM {table} WHERE `id` = %d AND `currency` = %d;", accountId, currencyCode), accountId)
 	if err != nil {
 		return nil, err
 	}
 	var balanceString string
 	var balance *big.Int
-	var onSerial uint64
+	var timestamp uint64
+	var changed bool
+	var notFound bool
 	if rows.Next() {
-		err = rows.Scan(&balanceString, &onSerial)
+		err = rows.Scan(&balanceString, &timestamp)
 		if err != nil {
 			rows.Close()
 			return nil, err
@@ -42,14 +48,17 @@ func GetBalance(nameHash uint64, currencyCode uint64) (*big.Int, error) {
 		}
 		balance = new(big.Int).SetBytes(balanceBytes)
 	} else {
+		changed = true
+		notFound = true
 		balance = big.NewInt(0)
 	}
 	rows.Close()
-	rows, err = database.Payments.Query(fmt.Sprintf("SELECT `amount` FROM {table} WHERE `receiver` = %d AND `timestamp` > %d", nameHash, onSerial), nameHash)
+	rows, err = database.Payments.Query(fmt.Sprintf("SELECT `amountTo` FROM {table} WHERE `receiver` = %d AND `timestamp` > %d AND `currencyTo` = %d;", accountId, timestamp, currencyCode), accountId)
 	if err != nil {
 		return nil, err
 	}
 	for rows.Next() {
+		changed = true
 		var amountString string
 		err = rows.Scan(&amountString)
 		if err != nil {
@@ -65,11 +74,12 @@ func GetBalance(nameHash uint64, currencyCode uint64) (*big.Int, error) {
 	}
 	rows.Close()
 
-	rows, err = database.Payments.Query(fmt.Sprintf("SELECT `amount` FROM {table} WHERE `sender` = %d AND `timestamp` > %d", nameHash, onSerial), nameHash)
+	rows, err = database.Payments.Query(fmt.Sprintf("SELECT `amountFrom` FROM {table} WHERE `sender` = %d AND `timestamp` > %d AND `currencyFrom` = %d;", accountId, timestamp, currencyCode), accountId)
 	if err != nil {
 		return nil, err
 	}
 	for rows.Next() {
+		changed = true
 		var amountString string
 		err = rows.Scan(&amountString)
 		if err != nil {
@@ -84,26 +94,29 @@ func GetBalance(nameHash uint64, currencyCode uint64) (*big.Int, error) {
 		balance.Sub(balance, new(big.Int).SetBytes(amountBytes))
 	}
 	rows.Close()
+	if changed {
+		go func() {
+			if notFound {
+				err := database.Balances.Put(accountId, eplidr.Columns{{"id", accountId}, {"balance", utils.EncodeBigInt(balance)}, {"onSerial", time.Now().UnixMicro()}, {"currency", currencyCode}})
+				if err != nil {
+					log.ErrorLogger.Println(err.Error())
+					return
+				}
+			} else {
+				err := database.Balances.Set(accountId, eplidr.Keys{{"id", accountId}, {"currency", currencyCode}}, eplidr.Columns{{"balance", utils.EncodeBigInt(balance)}, {"onSerial", time.Now().UnixMicro()}})
+				if err != nil {
+					log.ErrorLogger.Println(err.Error())
+					return
+				}
+			}
+		}()
+	}
 	return balance, nil
 }
 
-func FullScanBalance(nameHash uint64, currencyCode uint64) (uint64, error) {
+func FullScanBalance(accountId uint64, currencyCode uint64) (uint64, error) {
 	var balance uint64
-	rows, err := database.Payments.Query(fmt.Sprintf("SELECT `amount` FROM {table} WHERE `sender` = %d AND `currency` = %d;", nameHash, currencyCode), nameHash)
-	if err != nil {
-		return 0, err
-	}
-	for rows.Next() {
-		var amount uint64
-		err = rows.Scan(&amount)
-		if err != nil {
-			rows.Close()
-			return 0, err
-		}
-		balance -= amount
-	}
-	rows.Close()
-	rows, err = database.Payments.Query(fmt.Sprintf("SELECT `amount` FROM {table} WHERE `receiver` = %d AND `currency` = %d;", nameHash, currencyCode), nameHash)
+	rows, err := database.Payments.Query(fmt.Sprintf("SELECT `amountTo` FROM {table} WHERE `receiver` = %d AND `currencyTo` = %d;", accountId, currencyCode), accountId)
 	if err != nil {
 		return 0, err
 	}
@@ -117,11 +130,35 @@ func FullScanBalance(nameHash uint64, currencyCode uint64) (uint64, error) {
 		balance += amount
 	}
 	rows.Close()
+	rows, err = database.Payments.Query(fmt.Sprintf("SELECT `amountFrom` FROM {table} WHERE `sender` = %d AND `currencyFrom` = %d;", accountId, currencyCode), accountId)
+	if err != nil {
+		return 0, err
+	}
+	for rows.Next() {
+		var amount uint64
+		err = rows.Scan(&amount)
+		if err != nil {
+			rows.Close()
+			return 0, err
+		}
+		balance -= amount
+	}
+	rows.Close()
 	return balance, nil
 }
 
+func Exists(accountId uint64) (bool, error) {
+	_, found, err := database.Accounts.GetString(accountId, "name")
+	if err != nil {
+		return false, err
+	}
+	return found, nil
+}
+
 func GetId(username string) (uint64, bool, error) {
-	return database.Accounts.GetUint(fnv64(username), "nameHash")
+	id := fnv64(username)
+	_, exists, err := database.Accounts.GetString(id, "name")
+	return id, exists, err
 }
 
 type AccountInfo struct {

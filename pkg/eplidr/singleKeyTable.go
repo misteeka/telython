@@ -32,39 +32,36 @@ func SingleKeyImplementation(keyTable *Table, key string) *SingleKeyTable {
 }
 
 func (table *SingleKeyTable) GetString(key interface{}, column string) (string, bool, error) {
-	return table.Table.GetString(Column{Key: table.key, Value: key}, column)
+	return table.Table.GetString(Key{Name: table.key, Value: key}, column)
 }
 func (table *SingleKeyTable) GetInt(key interface{}, column string) (int, bool, error) {
-	return table.Table.GetInt(Column{Key: table.key, Value: key}, column)
+	return table.Table.GetInt(Key{Name: table.key, Value: key}, column)
 }
 func (table *SingleKeyTable) GetInt64(key interface{}, column string) (int64, bool, error) {
-	return table.Table.GetInt64(Column{Key: table.key, Value: key}, column)
+	return table.Table.GetInt64(Key{Name: table.key, Value: key}, column)
 }
 func (table *SingleKeyTable) GetFloat(key interface{}, column string) (float64, bool, error) {
-	return table.Table.GetFloat(Column{Key: table.key, Value: key}, column)
+	return table.Table.GetFloat(Key{Name: table.key, Value: key}, column)
 }
 func (table *SingleKeyTable) GetUint(key interface{}, column string) (uint64, bool, error) {
-	return table.Table.GetUint(Column{Key: table.key, Value: key}, column)
+	return table.Table.GetUint(Key{Name: table.key, Value: key}, column)
 }
 func (table *SingleKeyTable) GetBoolean(key interface{}, column string) (bool, bool, error) {
-	return table.Table.GetBoolean(Column{Key: table.key, Value: key}, column)
+	return table.Table.GetBoolean(Key{Name: table.key, Value: key}, column)
 }
 
 func (table *SingleKeyTable) Get(key interface{}, columns []string, data []interface{}) (error, bool) {
-	return table.Table.Get(key, Columns{Column{Key: table.key, Value: key}}, columns, data)
+	return table.Table.Get(key, Keys{{table.key, key}}, columns, data)
 }
-func (table *SingleKeyTable) Set(key interface{}, columns []string, values []interface{}) error {
-	return table.Table.Set(key, Columns{Column{Key: table.key, Value: key}}, PlainToColumns(columns, values))
+func (table *SingleKeyTable) Set(key interface{}, columns Columns) error {
+	return table.Table.Set(key, Keys{{table.key, key}}, columns)
 }
-func (table *SingleKeyTable) Add(key interface{}, columns []string, values []interface{}) error {
-	return table.Table.Add(key, Columns{Column{Key: table.key, Value: key}}, PlainToColumns(columns, values))
+func (table *SingleKeyTable) Add(key interface{}, columns Columns) error {
+	return table.Table.Add(key, Keys{{table.key, key}}, columns)
 }
 
 func (table *SingleKeyTable) SingleSet(key interface{}, column string, value interface{}) error {
-	return table.Table.Set(key, Columns{Column{Key: table.key, Value: key}}, Columns{Column{
-		Key:   column,
-		Value: value,
-	}})
+	return table.Table.Set(key, Keys{{table.key, key}}, Columns{{column, value}})
 }
 
 func (table *SingleKeyTable) Put(key interface{}, columns []string, values []interface{}) error {
@@ -72,10 +69,7 @@ func (table *SingleKeyTable) Put(key interface{}, columns []string, values []int
 }
 
 func (table *SingleKeyTable) Remove(key interface{}) error {
-	return table.Table.Remove(table.key, Columns{Column{
-		Key:   table.key,
-		Value: key,
-	}})
+	return table.Table.Remove(table.key, Keys{{table.key, key}})
 }
 
 func (table *SingleKeyTable) ReleaseRows(rows *sql.Rows) error {

@@ -6,11 +6,35 @@ import (
 )
 
 type Column struct {
-	Key   string
+	Name  string
 	Value interface{}
 }
+type Columns []Column
 
-func (column *Column) GetStringValue() string {
+type Key struct {
+	Name  string
+	Value interface{}
+}
+type Keys []Key
+
+func (keys Keys) Query() string {
+	if len(keys) == 0 {
+		return ""
+	}
+	query := "WHERE "
+	for i := 0; i < len(keys); i++ {
+		if i == len(keys)-1 {
+			query += fmt.Sprintf("`%s` = %s", keys[i].Name, keys[i].GetStringValue())
+		} else {
+			query += fmt.Sprintf("`%s` = %s AND ", keys[i].Name, keys[i].GetStringValue())
+		}
+	}
+	return query
+}
+func (key Key) GetStringValue() string {
+	return value(key.Value)
+}
+func (column Column) GetStringValue() string {
 	return value(column.Value)
 }
 
@@ -29,23 +53,6 @@ func value(i interface{}) string {
 	}
 }
 
-type Columns []Column
-
-func KeysToQuery(keys Columns) string {
-	if len(keys) == 0 {
-		return ""
-	}
-	query := "WHERE "
-	for i := 0; i < len(keys); i++ {
-		if i == len(keys)-1 {
-			query += fmt.Sprintf("`%s` = %s", keys[i].Key, keys[i].GetStringValue())
-		} else {
-			query += fmt.Sprintf("`%s` = %s,", keys[i].Key, keys[i].GetStringValue())
-		}
-	}
-	return query
-}
-
 func ColumnNamesToQuery(names ...string) string {
 	result := ""
 	for i := 0; i < len(names); i++ {
@@ -58,7 +65,7 @@ func PlainToColumns(keys []string, values []interface{}) Columns {
 	columns := make(Columns, len(keys))
 	for i := 0; i < len(keys); i++ {
 		columns[i] = Column{
-			Key:   keys[i],
+			Name:  keys[i],
 			Value: values[i],
 		}
 	}

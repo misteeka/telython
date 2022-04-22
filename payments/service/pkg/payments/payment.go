@@ -11,11 +11,12 @@ import (
 )
 
 type Payment struct {
-	Id        uint64 // Id unique value for a payment
-	Sender    uint64 // Sender is fvn64 of sender username
-	Receiver  uint64 // Receiver is fvn64 of receiver username
-	Timestamp uint64 // Timestamp UNIX timestamp in microseconds
-	Currency  *currency.Currency
+	Id           uint64 // Id unique value for a payment
+	Sender       uint64 // Sender is fvn64 of sender username
+	Receiver     uint64 // Receiver is fvn64 of receiver username
+	Timestamp    uint64 // Timestamp UNIX timestamp in microseconds
+	CurrencyFrom *currency.Currency
+	CurrencyTo   *currency.Currency
 }
 
 func fnv64(key string) uint64 {
@@ -29,41 +30,68 @@ func fnv64(key string) uint64 {
 	return hash
 }
 
-func New(From uint64, To uint64, currency *currency.Currency, timestamp uint64) *Payment {
+func New(From uint64, To uint64, currencyFrom *currency.Currency, currencyTo *currency.Currency, timestamp uint64) *Payment {
 	payment := Payment{
-		Id:        fnv64(strconv.FormatUint(From, 10) + strconv.FormatUint(To, 10) + strconv.FormatUint(timestamp, 10)),
-		Sender:    From,
-		Receiver:  To,
-		Currency:  currency,
-		Timestamp: timestamp,
+		Id:           fnv64(strconv.FormatUint(From, 10) + strconv.FormatUint(To, 10) + strconv.FormatUint(timestamp, 10)),
+		Sender:       From,
+		Receiver:     To,
+		CurrencyFrom: currencyFrom,
+		CurrencyTo:   currencyTo,
+		Timestamp:    timestamp,
 	}
 	return &payment
 }
 
 func (payment *Payment) Commit() error {
-	senderShardNum := database.Accounts.Table.GetShardNum(payment.Sender)
-	receiverShardNum := database.Accounts.Table.GetShardNum(payment.Receiver)
-	err := database.Payments.GetShard(senderShardNum).Put(
-		eplidr.PlainToColumns(
-			[]string{"id", "sender", "receiver", "amount", "timestamp", "currency"},
-			[]interface{}{payment.Id, payment.Sender, payment.Receiver, base64.StdEncoding.EncodeToString(payment.Currency.Amount.Bytes()), payment.Timestamp, payment.Currency.Type.Id},
-		),
-	)
-	if err != nil {
-		return err
-	}
-	if senderShardNum != receiverShardNum {
-		err = database.Payments.GetShard(receiverShardNum).Put(
+	if payment.Sender == 0 {
+		receiverShardNum := database.Accounts.Table.GetShardNum(payment.Receiver)
+		err := database.Payments.GetShard(receiverShardNum).Put(
 			eplidr.PlainToColumns(
-				[]string{"id", "sender", "receiver", "amount", "timestamp", "currency"},
-				[]interface{}{payment.Id, payment.Sender, payment.Receiver, base64.StdEncoding.EncodeToString(payment.Currency.Amount.Bytes()), payment.Timestamp, payment.Currency.Type.Id},
+				[]string{"id", "sender", "receiver", "amountFrom", "amountTo", "timestamp", "currencyFrom", "currencyTo"},
+				[]interface{}{payment.Id, payment.Sender, payment.Receiver, base64.StdEncoding.EncodeToString(payment.CurrencyFrom.Amount.Bytes()), base64.StdEncoding.EncodeToString(payment.CurrencyTo.Amount.Bytes()), payment.Timestamp, payment.CurrencyFrom.Type.Id, payment.CurrencyTo.Type.Id},
 			),
 		)
 		if err != nil {
 			return err
 		}
+		return nil
+	} else if payment.Receiver == 0 {
+		senderShardNum := database.Accounts.Table.GetShardNum(payment.Sender)
+		err := database.Payments.GetShard(senderShardNum).Put(
+			eplidr.PlainToColumns(
+				[]string{"id", "sender", "receiver", "amountFrom", "amountTo", "timestamp", "currencyFrom", "currencyTo"},
+				[]interface{}{payment.Id, payment.Sender, payment.Receiver, base64.StdEncoding.EncodeToString(payment.CurrencyFrom.Amount.Bytes()), base64.StdEncoding.EncodeToString(payment.CurrencyTo.Amount.Bytes()), payment.Timestamp, payment.CurrencyFrom.Type.Id, payment.CurrencyTo.Type.Id},
+			),
+		)
+		if err != nil {
+			return err
+		}
+		return nil
+	} else {
+		senderShardNum := database.Accounts.Table.GetShardNum(payment.Sender)
+		receiverShardNum := database.Accounts.Table.GetShardNum(payment.Receiver)
+		err := database.Payments.GetShard(senderShardNum).Put(
+			eplidr.PlainToColumns(
+				[]string{"id", "sender", "receiver", "amountFrom", "amountTo", "timestamp", "currencyFrom", "currencyTo"},
+				[]interface{}{payment.Id, payment.Sender, payment.Receiver, base64.StdEncoding.EncodeToString(payment.CurrencyFrom.Amount.Bytes()), base64.StdEncoding.EncodeToString(payment.CurrencyTo.Amount.Bytes()), payment.Timestamp, payment.CurrencyFrom.Type.Id, payment.CurrencyTo.Type.Id},
+			),
+		)
+		if err != nil {
+			return err
+		}
+		if senderShardNum != receiverShardNum {
+			err = database.Payments.GetShard(receiverShardNum).Put(
+				eplidr.PlainToColumns(
+					[]string{"id", "sender", "receiver", "amountFrom", "amountTo", "timestamp", "currencyFrom", "currencyTo"},
+					[]interface{}{payment.Id, payment.Sender, payment.Receiver, base64.StdEncoding.EncodeToString(payment.CurrencyFrom.Amount.Bytes()), base64.StdEncoding.EncodeToString(payment.CurrencyTo.Amount.Bytes()), payment.Timestamp, payment.CurrencyFrom.Type.Id, payment.CurrencyTo.Type.Id},
+				),
+			)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	}
-	return nil
 }
 
 func (payment *Payment) Serialize() ([]byte, error) {

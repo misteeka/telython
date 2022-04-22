@@ -13,7 +13,7 @@ func init() {
 	Types["USD"] = &Type{
 		Symbol:   "USD",
 		Id:       0,
-		Decimals: new(big.Int).Exp(big.NewInt(10), big.NewInt(8), nil),
+		Decimals: new(big.Int).Exp(big.NewInt(10), big.NewInt(20), nil),
 	}
 	Types["ETH"] = &Type{
 		Symbol:   "ETH",
@@ -30,6 +30,14 @@ func FromCode(code uint64) *Type {
 	return typesByCode[code]
 }
 
+func GetCurrency(symbol string, amount uint64, precision uint64) *Currency {
+	Type := Types[symbol]
+	return &Currency{
+		Type:   Type,
+		Amount: new(big.Int).Div(new(big.Int).Mul(new(big.Int).SetUint64(amount), Type.Decimals), new(big.Int).Exp(big.NewInt(10), new(big.Int).SetUint64(precision), nil)),
+	}
+}
+
 type Type struct {
 	Symbol   string
 	Id       uint64
@@ -42,7 +50,13 @@ type Currency struct {
 }
 
 func (currency *Currency) Readable() string {
-	return new(big.Float).Quo(new(big.Float).SetInt(currency.Amount), new(big.Float).SetInt(currency.Type.Decimals)).String()
+	if currency.Amount == nil {
+		return ""
+	}
+	if currency.Type == nil {
+		return ""
+	}
+	return new(big.Float).Quo(new(big.Float).SetInt(currency.Amount), new(big.Float).SetInt(currency.Type.Decimals)).String() + " " + currency.Type.Symbol
 }
 
 func (currency *Currency) Serialize() (uint64, string) {

@@ -10,20 +10,41 @@ import (
 	httpclient "telython/pkg/http/client"
 )
 
+var client *httpclient.Client
+
 func init() {
-	httpclient.Init("127.0.0.1:8002", "/payments/")
+	client = httpclient.New("127.0.0.1:8002", "/payments/")
 }
 
-func SendPayment(sender string, receiver string, currency *currency.Currency, password string) (*http.Error, error) {
-	json, err := httpclient.Post("sendPayment", fmt.Sprintf(`{"sender":"%s","receiver":"%s",amount":"%s","currency":%d,"password":"%s"}`, sender, receiver, base64.StdEncoding.EncodeToString(currency.Amount.Bytes()), currency.Type.Id, password))
+func SendPayment(sender string, receiver uint64, currency *currency.Currency, currencyCodeTo uint64, password string) (*http.Error, error) {
+	if currency.Type == nil {
+		return http.ToError(http.INVALID_CURRENCY_CODE), nil
+	}
+	if currency.Amount == nil {
+		return http.ToError(http.WRONG_AMOUNT), nil
+	}
+	if currency == nil {
+		return http.ToError(http.WRONG_AMOUNT), nil
+	}
+	fmt.Println(fmt.Sprintf(`{"sender":"%s","receiver":%d,"amount":"%s","currencyFrom":%d,"currencyTo":%d, "password":"%s"}`, sender, receiver, base64.StdEncoding.EncodeToString(currency.Amount.Bytes()), currency.Type.Id, currencyCodeTo, password))
+	json, err := client.Post("sendPayment", fmt.Sprintf(`{"sender":"%s","receiver":%d,"amount":"%s","currencyFrom":%d,"currencyTo":%d, "password":"%s"}`, sender, receiver, base64.StdEncoding.EncodeToString(currency.Amount.Bytes()), currency.Type.Id, currencyCodeTo, password))
 	return httpclient.GetError(json), err
 }
-func AddPayment(receiver string, currency *currency.Currency, password string) (*http.Error, error) {
-	json, err := httpclient.Post("addPayment", fmt.Sprintf(`{"receiver":"%s","amount":"%s","currency":%d,"password":"%s"}`, receiver, base64.StdEncoding.EncodeToString(currency.Amount.Bytes()), currency.Type.Id, password))
+func AddPayment(receiver uint64, currency *currency.Currency, secretKey string) (*http.Error, error) {
+	if currency.Type == nil {
+		return http.ToError(http.INVALID_CURRENCY_CODE), nil
+	}
+	if currency.Amount == nil {
+		return http.ToError(http.WRONG_AMOUNT), nil
+	}
+	if currency == nil {
+		return http.ToError(http.WRONG_AMOUNT), nil
+	}
+	json, err := client.Post("addPayment", fmt.Sprintf(`{"receiver":%d,"amount":"%s","currency":%d,"secretKey":"%s"}`, receiver, base64.StdEncoding.EncodeToString(currency.Amount.Bytes()), currency.Type.Id, secretKey))
 	return httpclient.GetError(json), err
 }
-func GetBalance(username string, password string) (*currency.Currency, *http.Error, error) {
-	json, err := httpclient.Get("getBalance?u=" + username + "&p=" + password)
+func GetBalance(username string, password string, currencyCode uint64) (*big.Int, *http.Error, error) {
+	json, err := client.Get(fmt.Sprintf("getBalance?u=%s&p=%s&c=%d", username, password, currencyCode))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -32,21 +53,18 @@ func GetBalance(username string, password string) (*currency.Currency, *http.Err
 		if err != nil {
 			return nil, nil, err
 		}
-		return &currency.Currency{
-			Type:   currency.FromCode(json.GetUint64("currency")),
-			Amount: new(big.Int).SetBytes(balance),
-		}, nil, nil
+		return new(big.Int).SetBytes(balance), nil, nil
 	} else {
 		return nil, httpclient.GetError(json), nil
 	}
 }
 func CreateAccount(username string, password string) (uint64, *http.Error, error) {
-	json, err := httpclient.Post("createAccount", fmt.Sprintf(`{"username":"%s","password":"%s"}`, username, password))
+	json, err := client.Post("createAccount", fmt.Sprintf(`{"username":"%s","password":"%s"}`, username, password))
 	return json.GetUint64("id"), httpclient.GetError(json), err
 }
 
 func GetHistory(username string, password string) ([]payments.Payment, *http.Error, error) {
-	json, err := httpclient.Get("getHistory?u=" + username + "&p=" + password)
+	json, err := client.Get("getHistory?u=" + username + "&p=" + password)
 	if err != nil {
 		return nil, httpclient.GetError(json), err
 	}

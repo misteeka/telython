@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/valyala/fastjson"
 	auth "telython/authentication/pkg/client"
 	"telython/pkg/http"
@@ -196,6 +197,10 @@ func Init() {
 		IdleTimeout:           time.Second * 60,
 		DisableStartupMessage: true,
 	})
+	App.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		//AllowHeaders: "Origin, Content-Type, Accept",
+	}))
 }
 
 func Run(addr string) error {

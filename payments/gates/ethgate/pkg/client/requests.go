@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	client.Init(":8003")
+	client.Init("127.0.0.1:8003", "/")
 }
 
 func GetAddress(id uint64) (*common.Address, *http.Error, error) {
