@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/gofiber/fiber/v2"
+	"math/big"
 	"strconv"
 	"telython/payments/pkg/currency"
 	"telython/payments/service/pkg/payments"
@@ -19,7 +20,8 @@ func registerHandlers() {
 		if err != nil {
 			return http.ToError(http.INVALID_REQUEST)
 		}
-		receiver := data.GetUint64("receiver")
+		sender := string(data.GetStringBytes("sender"))
+		receiver := string(data.GetStringBytes("receiver"))
 		amount, err := utils.DecodeBigInt(string(data.GetStringBytes("amount")))
 		if err != nil {
 			return http.ToError(http.INVALID_REQUEST)
@@ -44,7 +46,7 @@ func registerHandlers() {
 			return timestampError
 		}
 
-		return addPayment(receiver, currency, timestamp)
+		return addPayment(sender, receiver, currency, timestamp)
 	}))
 	server.Post("/payments/sendPayment", server.DefaultHandler(func(ctx *fiber.Ctx) *http.Error {
 		data, err := server.Deserialize(ctx.Body())
@@ -53,23 +55,20 @@ func registerHandlers() {
 		}
 
 		sender := string(data.GetStringBytes("sender"))
-		receiver := data.GetUint64("receiver")
-		amount, err := utils.DecodeBigInt(string(data.GetStringBytes("amount")))
-		if err != nil {
+		receiver := string(data.GetStringBytes("receiver"))
+		amount, ok := new(big.Int).SetString(string(data.GetStringBytes("amount")), 10)
+		if !ok {
 			return http.ToError(http.INVALID_REQUEST)
 		}
 		currencyCodeFrom := data.GetUint64("currencyFrom")
 		currencyTo := data.GetUint64("currencyTo")
 		password := string(data.GetStringBytes("password"))
 
-		authorizationError := server.Authorize(sender, password)
-		if authorizationError != nil {
-			return authorizationError
-		}
-
-		timestamp, timestampError := server.GetUniqueTimestamp(sender)
-		if timestampError != nil {
-			return timestampError
+		if sender == receiver && currencyTo == currencyCodeFrom {
+			return &http.Error{
+				Code:    http.INVALID_REQUEST,
+				Message: "You Cannot Convert The Same Currency",
+			}
 		}
 
 		currencyFrom := &currency.Currency{
@@ -81,7 +80,17 @@ func registerHandlers() {
 			return http.ToError(http.INVALID_CURRENCY_CODE)
 		}
 
-		return sendPayment(fnv64(sender), receiver, currencyFrom, currencyTo, timestamp)
+		authorizationError := server.Authorize(sender, password)
+		if authorizationError != nil {
+			return authorizationError
+		}
+
+		timestamp, timestampError := server.GetUniqueTimestamp(sender)
+		if timestampError != nil {
+			return timestampError
+		}
+
+		return sendPayment(sender, receiver, currencyFrom, currencyTo, timestamp)
 	}))
 	server.Get("/payments/getAccountInfo", server.ReturnDataHandler(func(ctx *fiber.Ctx) (*http.Error, interface{}) {
 		username := ctx.FormValue("u")
@@ -92,12 +101,11 @@ func registerHandlers() {
 			return authorizationError, nil
 		}
 
-		requestError, account := getAccountInfo(fnv64(username))
+		requestError, account := getAccountInfo(username)
 		if requestError != nil {
 			return requestError, nil
 		}
-
-		return requestError, server.Serialize(*account)
+		return requestError, account.Serialize()
 	}))
 	server.Get("/payments/getBalance", server.ReturnJsonHandler(func(ctx *fiber.Ctx) (*http.Error, interface{}) {
 		username := ctx.FormValue("u")
@@ -112,12 +120,14 @@ func registerHandlers() {
 			return authorizationError, nil
 		}
 
-		getError, balance := getBalance(fnv64(username), currencyCode)
+		currencyType := currency.FromCode(currencyCode)
+
+		getError, balance := getBalance(username, currencyType)
 		if getError != nil {
 			return getError, nil
 		}
 
-		return nil, fmt.Sprintf(`{"balance":"%s"}`, base64.StdEncoding.EncodeToString(balance.Bytes()))
+		return nil, fmt.Sprintf(`{"balance":"%s", "symbol":"%s", "decimals": %d}`, balance.String(), currencyType.Symbol, currencyType.Decimals)
 	}))
 	server.Get("/payments/getHistory", server.ReturnDataHandler(func(ctx *fiber.Ctx) (*http.Error, interface{}) {
 		username := ctx.FormValue("u")
@@ -128,16 +138,17 @@ func registerHandlers() {
 			return authorizationError, nil
 		}
 
-		requestError, history := getHistory(fnv64(username))
+		requestError, history := getHistory(username)
 		if requestError != nil {
 			return requestError, nil
 		}
 
-		bytes, err := payments.SerializePayments(*history)
+		serialized, err := payments.SerializePayments(*history)
 		if err != nil {
 			return http.ToError(http.INTERNAL_SERVER_ERROR), nil
 		}
-		return nil, bytes
+
+		return nil, fmt.Sprintf(`{"payments": "%s"}`, base64.StdEncoding.EncodeToString([]byte(serialized)))
 	}))
 	server.Get("/payments/getPayment", server.ReturnJsonHandler(func(ctx *fiber.Ctx) (*http.Error, interface{}) {
 		paymentId, err := utils.ParseUint(ctx.FormValue("id"))
@@ -160,17 +171,7 @@ func registerHandlers() {
 			return getError, nil
 		}
 		if requesterType == "receiver" {
-			username, found, err := getUsername(payment.Receiver)
-			if err != nil {
-				return http.ToError(http.INTERNAL_SERVER_ERROR), nil
-			}
-			if !found {
-				return &http.Error{
-					Code:    http.AUTHORIZATION_FAILED,
-					Message: "Account Not Found",
-				}, nil
-			}
-			authorizationError := server.Authorize(username, password)
+			authorizationError := server.Authorize(payment.Receiver, password)
 			if authorizationError != nil {
 				return authorizationError, nil
 			}

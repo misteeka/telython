@@ -40,9 +40,9 @@ func InitDatabase() error {
 		2,
 		[]string{
 			`CREATE TABLE IF NOT EXISTS {table} (
-				name varchar(255) primary key {nn},
+				name varchar(64) primary key {nn},
 				password varchar(44) {nn},
-				email varchar(255) {nn},
+				email varchar(256) {nn},
 				reg_date uint64 {nn},
 				last_login uint64 {nn},
 				last_ip varchar(40) {nn},
@@ -61,8 +61,8 @@ func InitDatabase() error {
 		2,
 		[]string{
 			`CREATE TABLE IF NOT EXISTS {table} (
-				email varchar(255) primary key {nn},
-				name varchar(255) {nn}
+				email varchar(256) primary key {nn},
+				name varchar(64) {nn}
 			);`,
 		},
 		db,
@@ -76,7 +76,7 @@ func InitDatabase() error {
 		2,
 		[]string{
 			`CREATE TABLE IF NOT EXISTS {table} (
-				name varchar(255) {nn} primary key,
+				name varchar(64) {nn} primary key,
 				code int {nn}
 			);`,
 		},
@@ -91,8 +91,8 @@ func InitDatabase() error {
 		2,
 		[]string{
 			`CREATE TABLE IF NOT EXISTS {table} (
-				name varchar(255) {nn} primary key,
-				email varchar(255) {nn},
+				name varchar(64) {nn} primary key,
+				email varchar(256) {nn},
 				code int {nn},
 				timestamp uint64 {nn}
 			);`,

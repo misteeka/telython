@@ -27,7 +27,7 @@ func main() {
 	panicIfError(database.InitDatabase())
 
 	log.InfoLogger.Println("Fiber initializing")
-	server.Init()
+	panicIfError(server.Init())
 	registerHandlers()
 
 	log.InfoLogger.Println("Fiber run")

@@ -28,8 +28,8 @@ func createWallet(username string) (*ethapi.Wallet, *http.Error) {
 		return nil, http.ToError(http.INTERNAL_SERVER_ERROR)
 	}
 	err = database.WalletToAccount.Put(wallet.GetAddressBase64(),
-		[]string{"id", "address"},
-		[]interface{}{utils.Fnv64(username), wallet.GetAddressBase64()},
+		[]string{"name", "address"},
+		[]interface{}{username, wallet.GetAddressBase64()},
 	)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
@@ -59,10 +59,12 @@ func getAddress(username string) (*common.Address, *http.Error) {
 		return nil, http.ToError(http.INTERNAL_SERVER_ERROR)
 	}
 	if !found {
-		return nil, &http.Error{
-			Code:    http.NOT_FOUND,
-			Message: "Wallet Not Found",
+		wallet, requestError := createWallet(username)
+		if requestError != nil {
+			log.ErrorLogger.Println(requestError.Message)
+			return nil, http.ToError(http.INTERNAL_SERVER_ERROR)
 		}
+		return wallet.Address, nil
 	}
 	address, err := ethapi.Base64ToAddress(base64Address)
 	if err != nil {

@@ -190,7 +190,7 @@ func Get(path string, handler Handler) fiber.Router {
 	}
 }
 
-func Init() {
+func Init() error {
 	App = fiber.New(fiber.Config{
 		ReadTimeout:           time.Second * 30,
 		WriteTimeout:          time.Second * 30,
@@ -201,10 +201,11 @@ func Init() {
 		AllowOrigins: "*",
 		//AllowHeaders: "Origin, Content-Type, Accept",
 	}))
+	return nil
 }
 
 func Run(addr string) error {
-	return App.Listen(addr)
+	return App.ListenTLS(addr, "./certs/cert.pem", "./certs/cert.key")
 }
 
 func Deserialize(jsonBytes []byte) (data *fastjson.Value, err error) {

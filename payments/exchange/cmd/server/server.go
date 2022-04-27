@@ -3,10 +3,10 @@ package main
 import (
 	"fmt"
 	"github.com/gofiber/fiber/v2"
+	"math/big"
 	"telython/pkg/cfg"
 	"telython/pkg/http"
 	"telython/pkg/http/server"
-	"telython/pkg/utils"
 )
 
 func registerHandlers() {
@@ -25,7 +25,7 @@ func registerHandlers() {
 		if requestError != nil {
 			return requestError, nil
 		}
-		return nil, fmt.Sprintf(`{"price": "%s"}`, utils.EncodeBigInt(price))
+		return nil, fmt.Sprintf(`{"price": "%s"}`, price.String())
 
 	}))
 
@@ -36,8 +36,8 @@ func registerHandlers() {
 		}
 		from := data.GetUint64("from")
 		to := data.GetUint64("to")
-		amount, err := utils.DecodeBigInt(string(data.GetStringBytes("amount")))
-		if err != nil {
+		amount, ok := new(big.Int).SetString(string(data.GetStringBytes("amount")), 10)
+		if !ok {
 			return http.ToError(http.INVALID_REQUEST), nil
 		}
 		secretKey := string(data.GetStringBytes("key"))
@@ -52,7 +52,7 @@ func registerHandlers() {
 		if requestError != nil {
 			return requestError, nil
 		}
-		return nil, fmt.Sprintf(`{"fund": "%s"}`, utils.EncodeBigInt(fundTo))
+		return nil, fmt.Sprintf(`{"fund": "%s"}`, fundTo.String())
 	}))
 }
 

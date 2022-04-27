@@ -53,7 +53,7 @@ func newBlockHandler() {
 					continue
 				}
 				for _, tx := range block.Transactions() {
-					accountId, found, err := database.WalletToAccount.GetUint(ethapi.AddressToBase64(tx.To()), "id")
+					username, found, err := database.WalletToAccount.GetString(ethapi.AddressToBase64(tx.To()), "name")
 					if err != nil {
 						log.ErrorLogger.Println(err.Error())
 						continue
@@ -65,15 +65,15 @@ func newBlockHandler() {
 						Amount: tx.Value(),
 						Type:   currency.Types["ETH"],
 					}
-					paymentError, err := tpay.AddPayment(accountId, currency, "secret")
+					paymentError, err := tpay.AddPayment("deposit", username, currency, "qazwsx")
 					if err != nil {
 						log.ErrorLogger.Println(err.Error())
 						continue
 					}
 					if paymentError != nil {
-						log.WarnLogger.Println("Error ("+paymentError.Message+") during adding ", tx.Value().String(), "to", accountId, "("+tx.To().Hex()+")", "confirmations:", 12)
+						log.WarnLogger.Println("Error ("+paymentError.Message+") during adding ", tx.Value().String(), "to", username, "("+tx.To().Hex()+")", "confirmations:", 12)
 					} else {
-						log.InfoLogger.Println("Added", tx.Value().String(), "to", accountId, "("+tx.To().Hex()+")", "confirmations:", 12)
+						log.InfoLogger.Println("Added", tx.Value().String(), "to", username, "("+tx.To().Hex()+")", "confirmations:", 12)
 					}
 				}
 			}

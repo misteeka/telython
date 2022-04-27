@@ -123,7 +123,7 @@ func main() {
 			}
 			password := args[5]
 			start := time.Now()
-			status, err := client.SendPayment(sender, fnv64(receiver), &currency.Currency{
+			status, err := client.SendPayment(sender, receiver, &currency.Currency{
 				Type:   currency.FromCode(currencyFrom),
 				Amount: amount,
 			}, currencyTo, password)
@@ -133,20 +133,21 @@ func main() {
 				fmt.Println("Wrong args")
 				continue
 			}
-			receiver := args[0]
-			amount, ok := new(big.Int).SetString(args[1], 10)
+			sender := args[0]
+			receiver := args[1]
+			amount, ok := new(big.Int).SetString(args[2], 10)
 			if !ok {
 				fmt.Println("Wrong amount")
 				continue
 			}
-			currencyCode, err := strconv.ParseUint(args[2], 10, 64)
+			currencyCode, err := strconv.ParseUint(args[3], 10, 64)
 			if err != nil {
 				fmt.Println(err.Error())
 				continue
 			}
 			secretKey := args[3]
 			start := time.Now()
-			requestError, err := client.AddPayment(fnv64(receiver), &currency.Currency{
+			requestError, err := client.AddPayment(sender, receiver, &currency.Currency{
 				Type:   currency.FromCode(currencyCode),
 				Amount: amount,
 			}, secretKey)
@@ -164,6 +165,16 @@ func main() {
 			start := time.Now()
 			result, error, err := client.GetHistory(username, password)
 			print(result, error, err, start)
+		} else if strings.Compare("accountInfo", cmd) == 0 {
+			if len(args) < 2 {
+				fmt.Println("Wrong args")
+				continue
+			}
+			username := args[0]
+			password := args[1]
+			start := time.Now()
+			error, err := client.GetAccountInfo(username, password)
+			print(nil, error, err, start)
 		} else {
 			fmt.Println("Unknown command.")
 		}

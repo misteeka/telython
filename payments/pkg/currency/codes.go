@@ -2,6 +2,8 @@ package currency
 
 import (
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"math/big"
 )
 
@@ -63,13 +65,17 @@ func (currency *Currency) Serialize() (uint64, string) {
 	return currency.Type.Id, base64.StdEncoding.EncodeToString(currency.Amount.Bytes())
 }
 
-func Deserialize(currencyCode uint64, serialized string) (*Currency, error) {
-	bytes, err := base64.StdEncoding.DecodeString(serialized)
-	if err != nil {
-		return nil, err
+func (currency *Currency) Json() string {
+	return fmt.Sprintf(`{"Type": %d, "Amount": "%s"}`, currency.Type.Id, currency.Amount)
+}
+
+func Deserialize(currencyCode uint64, amountString string) (*Currency, error) {
+	amount, ok := new(big.Int).SetString(amountString, 10)
+	if !ok {
+		return nil, errors.New("Wrong amount " + amountString)
 	}
 	return &Currency{
 		Type:   typesByCode[currencyCode],
-		Amount: new(big.Int).SetBytes(bytes),
+		Amount: amount,
 	}, nil
 }

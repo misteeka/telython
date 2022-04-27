@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"math/big"
+	"sort"
 	exchange "telython/payments/exchange/pkg/client"
 	"telython/payments/pkg/currency"
 	"telython/payments/service/pkg/accounts"
@@ -18,7 +20,7 @@ func getUsername(id uint64) (string, bool, error) {
 	return database.Accounts.GetString(id, "name")
 }
 
-func sendPayment(senderId uint64, receiverId uint64, currencyFrom *currency.Currency, currencyCodeTo uint64, timestamp uint64) *http.Error {
+func sendPayment(sender string, receiver string, currencyFrom *currency.Currency, currencyCodeTo uint64, timestamp uint64) *http.Error {
 	// Check amount
 	if currencyFrom.Amount.Cmp(big.NewInt(0)) <= 0 {
 		return &http.Error{
@@ -28,7 +30,7 @@ func sendPayment(senderId uint64, receiverId uint64, currencyFrom *currency.Curr
 	}
 
 	// Check do accounts exists
-	exists, err := accounts.Exists(senderId)
+	exists, err := accounts.Exists(sender)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return http.ToError(http.INTERNAL_SERVER_ERROR)
@@ -39,7 +41,7 @@ func sendPayment(senderId uint64, receiverId uint64, currencyFrom *currency.Curr
 			Message: "Sender Not Found!",
 		}
 	}
-	exists, err = accounts.Exists(receiverId)
+	exists, err = accounts.Exists(receiver)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return http.ToError(http.INTERNAL_SERVER_ERROR)
@@ -68,7 +70,7 @@ func sendPayment(senderId uint64, receiverId uint64, currencyFrom *currency.Curr
 	}
 
 	// Check balance
-	balance, err := accounts.GetBalance(senderId, currencyFrom.Type.Id)
+	balance, err := accounts.GetBalance(sender, currencyFrom.Type.Id)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return http.ToError(http.INTERNAL_SERVER_ERROR)
@@ -81,7 +83,7 @@ func sendPayment(senderId uint64, receiverId uint64, currencyFrom *currency.Curr
 	}
 
 	// Process payment
-	payment := payments.New(senderId, receiverId, currencyFrom, currencyTo, timestamp)
+	payment := payments.New(sender, receiver, currencyFrom, currencyTo, timestamp)
 
 	err = payment.Commit()
 	if err != nil {
@@ -91,7 +93,7 @@ func sendPayment(senderId uint64, receiverId uint64, currencyFrom *currency.Curr
 	return nil
 }
 
-func addPayment(receiverId uint64, currency *currency.Currency, timestamp uint64) *http.Error {
+func addPayment(sender string, receiverId string, currency *currency.Currency, timestamp uint64) *http.Error {
 
 	exists, err := accounts.Exists(receiverId)
 	if err != nil {
@@ -105,7 +107,7 @@ func addPayment(receiverId uint64, currency *currency.Currency, timestamp uint64
 		}
 	}
 
-	payment := payments.New(0, receiverId, currency, currency, timestamp)
+	payment := payments.New(sender, receiverId, currency, currency, timestamp)
 
 	err = payment.Commit()
 	if err != nil {
@@ -115,11 +117,11 @@ func addPayment(receiverId uint64, currency *currency.Currency, timestamp uint64
 	return nil
 }
 
-func getBalance(accountId uint64, currencyCode uint64) (*http.Error, *big.Int) {
-	if currency.FromCode(currencyCode) == nil {
+func getBalance(username string, currency *currency.Type) (*http.Error, *big.Int) {
+	if currency == nil {
 		return http.ToError(http.INVALID_CURRENCY_CODE), nil
 	}
-	exists, err := accounts.Exists(accountId)
+	exists, err := accounts.Exists(username)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return http.ToError(http.INTERNAL_SERVER_ERROR), nil
@@ -130,7 +132,7 @@ func getBalance(accountId uint64, currencyCode uint64) (*http.Error, *big.Int) {
 			Message: "Account Not Found!",
 		}, nil
 	}
-	balance, err := accounts.GetBalance(accountId, currencyCode)
+	balance, err := accounts.GetBalance(username, currency.Id)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return http.ToError(http.INTERNAL_SERVER_ERROR), nil
@@ -138,9 +140,9 @@ func getBalance(accountId uint64, currencyCode uint64) (*http.Error, *big.Int) {
 	return nil, balance
 }
 
-func getHistory(accountId uint64) (*http.Error, *[]payments.Payment) {
-	/* TODO
-	exists, err := accounts.Exists(accountId)
+func getHistory(username string) (*http.Error, *[]payments.Payment) {
+	accountId := fnv64(username)
+	exists, err := accounts.ExistsId(accountId)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return http.ToError(http.INTERNAL_SERVER_ERROR), nil
@@ -152,32 +154,44 @@ func getHistory(accountId uint64) (*http.Error, *[]payments.Payment) {
 		}, nil
 	}
 	var history []payments.Payment
-	rows, err := database.Payments.Query(fmt.Sprintf("SELECT * FROM {table} WHERE `sender` = %d OR `receiver` = %d LIMIT 2000;", accountId, accountId), accountId)
+	rows, err := database.Payments.Query(fmt.Sprintf("SELECT * FROM {table} WHERE `sender` = '%s' OR `receiver` = '%s' LIMIT 2000;", username, username), accountId)
 	if err != nil {
 		return http.ToError(http.INTERNAL_SERVER_ERROR), nil
 	}
 	for rows.Next() {
 		var payment payments.Payment
-		var serializedAmount string
-		var currencyCode uint64
-		err = rows.Scan(&payment.Id, &payment.Sender, &payment.Receiver, &serializedAmount, &currencyCode, &payment.Timestamp)
+		var amountFromString string
+		var amountToString string
+
+		var currencyFromCode uint64
+		var currencyToCode uint64
+		err = rows.Scan(&payment.Id, &payment.Sender, &payment.Receiver, &amountFromString, &amountToString, &currencyFromCode, &currencyToCode, &payment.Timestamp)
 		if err != nil {
 			rows.Close()
 			return http.ToError(http.INTERNAL_SERVER_ERROR), nil
 		}
-		currency, err := currency.Deserialize(currencyCode, serializedAmount)
+		currencyFrom, err := currency.Deserialize(currencyFromCode, amountFromString)
 		if err != nil {
 			rows.Close()
 			return http.ToError(http.INTERNAL_SERVER_ERROR), nil
 		}
-		payment.Currency = currency
+		currencyTo, err := currency.Deserialize(currencyToCode, amountToString)
+		if err != nil {
+			rows.Close()
+			return http.ToError(http.INTERNAL_SERVER_ERROR), nil
+		}
+		payment.CurrencyFrom = currencyFrom
+		payment.CurrencyTo = currencyTo
 		history = append(history, payment)
 	}
-	return nil, &history*/return nil, nil
+	sort.Slice(history[:], func(i, j int) bool {
+		return history[i].Timestamp > history[j].Timestamp
+	})
+	return nil, &history
 }
 
-func getAccountInfo(accountId uint64) (*http.Error, *accounts.AccountInfo) {
-	accountInfo, err := accounts.GetAccountInfo(accountId)
+func getAccountInfo(username string) (*http.Error, *accounts.AccountInfo) {
+	accountInfo, err := accounts.GetAccountInfo(username)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return http.ToError(http.INTERNAL_SERVER_ERROR), nil

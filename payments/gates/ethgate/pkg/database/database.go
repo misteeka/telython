@@ -47,10 +47,13 @@ func InitDatabase() error {
 		"address",
 		2,
 		[]string{
-			"CREATE TABLE IF NOT EXISTS {table} (`address` varchar(128) {nn} primary key, `id` uint64 {nn});",
+			"CREATE TABLE IF NOT EXISTS {table} (`address` varchar(128) {nn} primary key, `name` varchar(128) {nn});",
 		},
 		defaultDriver,
 	)
+
+	//WalletToAccount.Table.DropUnsafe()
+	//AccountToWallet.Table.DropUnsafe()
 	return nil
 }
 

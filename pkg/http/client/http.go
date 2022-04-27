@@ -18,15 +18,16 @@ type Client struct {
 func New(_addr string, apiPath string) *Client {
 	var addr string
 	if apiPath[0] != '/' {
-		addr = "http://" + _addr + "/" + apiPath
+		addr = "https://" + _addr + "/" + apiPath
 	} else {
-		addr = "http://" + _addr + apiPath
+		addr = "https://" + _addr + apiPath
 	}
 	client := &fasthttp.HostClient{
 		Addr:                _addr,
 		MaxIdleConnDuration: time.Minute,
 		ReadTimeout:         30 * time.Second,
 		WriteTimeout:        30 * time.Second,
+		IsTLS:               true,
 	}
 	return &Client{
 		driver: client,

@@ -36,7 +36,7 @@ func InitDatabase() error {
 		"payments",
 		4,
 		[]string{
-			"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn},`sender` uint64 {nn},`receiver` uint64 {nn},`amountFrom` varchar(32) {nn},`amountTo` varchar(32) {nn},`currencyFrom` uint64 {nn},`currencyTo` uint64 {nn},`timestamp` uint64 {nn});",
+			"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn},`sender` varchar(64) {nn},`receiver` varchar(64) {nn},`amountFrom` varchar(64) {nn},`amountTo` varchar(64) {nn},`currencyFrom` uint64 {nn},`currencyTo` uint64 {nn},`timestamp` uint64 {nn});",
 			"create index index_sender on {table} (sender);",
 			"create index index_receiver on {table} (receiver);",
 			"create index index_serial on {table} (timestamp);",
@@ -51,7 +51,7 @@ func InitDatabase() error {
 		"accounts",
 		"id",
 		4,
-		[]string{"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 primary key {nn}, `name` varchar(255) {nn});"},
+		[]string{"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 primary key {nn}, `name` varchar(64) {nn});"},
 		defaultDriver,
 	)
 	if err != nil {
@@ -61,7 +61,7 @@ func InitDatabase() error {
 		"balances",
 		4,
 		[]string{
-			"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn}, `balance` varchar(20) {nn}, `onSerial` uint64 {nn}, `currency` uint64 {nn});",
+			"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn}, `balance` varchar(64) {nn}, `onSerial` uint64 {nn}, `currency` uint64 {nn});",
 			"create index index_id on {table} (id);",
 			"create index index_onSerial on {onSerial} (id);",
 			"create index index_currency on {currency} (id);",
@@ -74,7 +74,7 @@ func InitDatabase() error {
 
 	//Payments.DropUnsafe()
 	//Accounts.Table.DropUnsafe()
-	//Balances.Table.DropUnsafe()
+	//Balances.DropUnsafe()
 	return nil
 }
 

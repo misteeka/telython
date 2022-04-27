@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"telython/pkg/http"
 	"telython/pkg/http/server"
@@ -9,11 +10,10 @@ import (
 func registerHandlers() {
 	server.Get("/getPrivate", server.ReturnDataHandler(func(ctx *fiber.Ctx) (*http.Error, interface{}) {
 		username := ctx.FormValue("u")
-		password := ctx.FormValue("p")
+		secret_key := ctx.FormValue("key")
 
-		authorizationError := server.Authorize(username, password)
-		if authorizationError != nil {
-			return authorizationError, nil
+		if secret_key != "qazwsx" {
+			return http.ToError(http.AUTHORIZATION_FAILED), nil
 		}
 
 		private, requestError := getPrivate(username)
@@ -36,7 +36,7 @@ func registerHandlers() {
 		if requestError != nil {
 			return requestError, nil
 		}
-		return nil, address
+		return nil, fmt.Sprintf(`{"address": "%s"}`, address)
 	}))
 }
 

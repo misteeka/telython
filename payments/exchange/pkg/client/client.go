@@ -1,7 +1,9 @@
 package client
 
 import (
+	"errors"
 	"fmt"
+	"math/big"
 	"telython/payments/pkg/currency"
 	"telython/pkg/http"
 	httpclient "telython/pkg/http/client"
@@ -19,9 +21,9 @@ func GetPrice(symbol string, key string) (*currency.Currency, *http.Error, error
 	if err != nil {
 		return nil, nil, err
 	}
-	price, err := utils.DecodeBigInt(string(json.GetStringBytes("price")))
-	if err != nil {
-		return nil, httpclient.GetError(json), nil
+	price, ok := new(big.Int).SetString(string(json.GetStringBytes("price")), 10)
+	if !ok {
+		return nil, httpclient.GetError(json), errors.New("Wrong pric!")
 	}
 	return &currency.Currency{
 		Type:   currency.Types["USD"],
@@ -34,9 +36,9 @@ func Convert(from *currency.Currency, to uint64, key string) (*http.Error, *curr
 	if err != nil {
 		return nil, nil, err
 	}
-	fund, err := utils.DecodeBigInt(string(json.GetStringBytes("fund")))
-	if err != nil {
-		return httpclient.GetError(json), nil, err
+	fund, ok := new(big.Int).SetString(string(json.GetStringBytes("fund")), 10)
+	if !ok {
+		return httpclient.GetError(json), nil, errors.New("Wrong fund!")
 	}
 	return httpclient.GetError(json), &currency.Currency{
 		Type:   currency.FromCode(to),
