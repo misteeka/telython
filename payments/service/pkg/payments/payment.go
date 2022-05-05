@@ -67,7 +67,7 @@ func (payment *Payment) Commit() error {
 		}
 		return nil
 	} else {
-		senderShardNum := database.Accounts.Table.GetShardNum(fnv64(payment.Receiver))
+		senderShardNum := database.Accounts.Table.GetShardNum(fnv64(payment.Sender))
 		receiverShardNum := database.Accounts.Table.GetShardNum(fnv64(payment.Receiver))
 		err := database.Payments.GetShard(senderShardNum).Put(
 			eplidr.PlainToColumns(

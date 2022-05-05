@@ -148,7 +148,12 @@ func registerHandlers() {
 			return http.ToError(http.INTERNAL_SERVER_ERROR), nil
 		}
 
-		return nil, fmt.Sprintf(`{"payments": "%s"}`, base64.StdEncoding.EncodeToString([]byte(serialized)))
+		if serialized == "" {
+			return nil, fmt.Sprintf(`{"payments": "%s"}`, base64.StdEncoding.EncodeToString([]byte("{}")))
+		} else {
+			return nil, fmt.Sprintf(`{"payments": "%s"}`, base64.StdEncoding.EncodeToString([]byte(serialized)))
+
+		}
 	}))
 	server.Get("/payments/getPayment", server.ReturnJsonHandler(func(ctx *fiber.Ctx) (*http.Error, interface{}) {
 		paymentId, err := utils.ParseUint(ctx.FormValue("id"))

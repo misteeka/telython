@@ -26,7 +26,7 @@ func SendPayment(sender string, receiver string, currency *currency.Currency, cu
 	if currency == nil {
 		return http.ToError(http.WRONG_AMOUNT), nil
 	}
-	json, err := client.Post("sendPayment", fmt.Sprintf(`{"sender":"%s","receiver":"%s","amount":"%s","currencyFrom":%d,"currencyTo":%d, "password":"%s"}`, sender, receiver, base64.StdEncoding.EncodeToString(currency.Amount.Bytes()), currency.Type.Id, currencyCodeTo, password))
+	json, err := client.Post("sendPayment", fmt.Sprintf(`{"sender":"%s","receiver":"%s","amount":"%s","currencyFrom":%d,"currencyTo":%d, "password":"%s"}`, sender, receiver, currency.Amount.String(), currency.Type.Id, currencyCodeTo, password))
 	return httpclient.GetError(json), err
 }
 func AddPayment(sender string, receiver string, currency *currency.Currency, secretKey string) (*http.Error, error) {

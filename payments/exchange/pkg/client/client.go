@@ -7,7 +7,6 @@ import (
 	"telython/payments/pkg/currency"
 	"telython/pkg/http"
 	httpclient "telython/pkg/http/client"
-	"telython/pkg/utils"
 )
 
 var client *httpclient.Client
@@ -32,7 +31,7 @@ func GetPrice(symbol string, key string) (*currency.Currency, *http.Error, error
 }
 
 func Convert(from *currency.Currency, to uint64, key string) (*http.Error, *currency.Currency, error) {
-	json, err := client.Put("convert", fmt.Sprintf(`{"from": %d, "to": %d, "amount":"%s", "key":"%s"}`, from.Type.Id, to, utils.EncodeBigInt(from.Amount), key))
+	json, err := client.Put("convert", fmt.Sprintf(`{"from": %d, "to": %d, "amount":"%s", "key":"%s"}`, from.Type.Id, to, from.Amount.String(), key))
 	if err != nil {
 		return nil, nil, err
 	}

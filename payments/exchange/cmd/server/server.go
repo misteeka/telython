@@ -32,12 +32,14 @@ func registerHandlers() {
 	server.Put("/convert", server.ReturnJsonHandler(func(ctx *fiber.Ctx) (*http.Error, interface{}) {
 		data, err := server.Deserialize(ctx.Body())
 		if err != nil {
+			fmt.Println("sgbdrn`1")
 			return http.ToError(http.INVALID_REQUEST), nil
 		}
 		from := data.GetUint64("from")
 		to := data.GetUint64("to")
 		amount, ok := new(big.Int).SetString(string(data.GetStringBytes("amount")), 10)
 		if !ok {
+			fmt.Println("sgbdrn`21")
 			return http.ToError(http.INVALID_REQUEST), nil
 		}
 		secretKey := string(data.GetStringBytes("key"))
@@ -50,8 +52,10 @@ func registerHandlers() {
 		}
 		requestError, fundTo := convert(from, to, amount)
 		if requestError != nil {
+			fmt.Println("sgbdrn`31")
 			return requestError, nil
 		}
+		fmt.Println(fmt.Sprintf(`{"fund": "%s"}`, fundTo.String()))
 		return nil, fmt.Sprintf(`{"fund": "%s"}`, fundTo.String())
 	}))
 }

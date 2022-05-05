@@ -145,7 +145,7 @@ func main() {
 				fmt.Println(err.Error())
 				continue
 			}
-			secretKey := args[3]
+			secretKey := args[4]
 			start := time.Now()
 			requestError, err := client.AddPayment(sender, receiver, &currency.Currency{
 				Type:   currency.FromCode(currencyCode),
