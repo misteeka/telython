@@ -7,15 +7,17 @@ import (
 	"strconv"
 	ethapi "telython/payments/gates/ethgate/pkg/ethereum/api"
 	"telython/pkg/http"
-	"telython/pkg/http/client"
+	client "telython/pkg/http/client"
 )
 
+var httpclient *client.Client
+
 func init() {
-	client.Init("127.0.0.1:8003", "/")
+	httpclient = client.New("127.0.0.1:8003", "/")
 }
 
 func GetAddress(id uint64) (*common.Address, *http.Error, error) {
-	value, err := client.Get("getAddress?id=" + strconv.FormatUint(id, 10))
+	value, err := httpclient.Get("getAddress?id=" + strconv.FormatUint(id, 10))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -47,7 +49,7 @@ func GetWallet(id uint64) (*ethapi.Wallet, *http.Error, error) {
 }
 
 func CreateWallet(id uint64) (*ethapi.Wallet, *http.Error, error) {
-	value, err := client.Post("createWallet", fmt.Sprintf(`{"id":%d}`, id))
+	value, err := httpclient.Post("createWallet", fmt.Sprintf(`{"id":%d}`, id))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -67,7 +69,7 @@ func CreateWallet(id uint64) (*ethapi.Wallet, *http.Error, error) {
 }
 
 func GetPrivate(id uint64) (*ecdsa.PrivateKey, *http.Error, error) {
-	value, err := client.Get("getPrivate?id=" + strconv.FormatUint(id, 10))
+	value, err := httpclient.Get("getPrivate?id=" + strconv.FormatUint(id, 10))
 	if err != nil {
 		return nil, nil, err
 	}

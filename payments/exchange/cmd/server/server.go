@@ -47,7 +47,7 @@ func registerHandlers() {
 		if secretKey != cfg.GetString("secretKey") {
 			return &http.Error{
 				Code:    http.AUTHORIZATION_FAILED,
-				Message: "Secret Name Invalid",
+				Message: "Secret Key Invalid",
 			}, nil
 		}
 		requestError, fundTo := convert(from, to, amount)

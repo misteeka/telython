@@ -47,7 +47,7 @@ func newBlockHandler() {
 			}
 			log.InfoLogger.Println("New block #", newBlock.Number().Uint64())
 			if newBlock.NumberU64() > 12 {
-				block, err := Client.BlockByNumber(context.Background(), new(big.Int).Sub(newBlock.Number(), big.NewInt(12)))
+				block, err := Client.BlockByNumber(context.Background(), new(big.Int).Sub(newBlock.Number(), big.NewInt(0)))
 				if err != nil {
 					log.ErrorLogger.Println(err.Error())
 					continue
